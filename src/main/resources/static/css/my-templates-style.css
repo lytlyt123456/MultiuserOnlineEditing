@@ -1,0 +1,176 @@
+        .filter-section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        .filter-form {
+            display: grid;
+            grid-template-columns: auto auto 1fr;
+            gap: 1rem;
+            align-items: end;
+        }
+        .form-group {
+            margin-bottom: 0;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+        .form-group select, .form-group input {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            min-width: 200px;
+        }
+        .category-selector {
+            display: none;
+        }
+        .templates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        .template-card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        .template-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 4px 12px rgba(0,123,255,0.1);
+            transform: translateY(-2px);
+        }
+        .template-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        .template-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+        .template-category {
+            background: #e7f3ff;
+            color: #007bff;
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .template-description {
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+            min-height: 60px;
+        }
+        .template-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            color: #999;
+        }
+        .template-visibility {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        .visibility-public {
+            background: #d4edda;
+            color: #155724;
+        }
+        .visibility-private {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .template-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .btn-edit {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn-edit:hover {
+            background: #218838;
+        }
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn-delete:hover {
+            background: #c82333;
+        }
+        .btn-toggle {
+            background: #ffc107;
+            color: #212529;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn-toggle:hover {
+            background: #e0a800;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        .action-buttons {
+            margin-bottom: 1.5rem;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pagination-info {
+            color: #666;
+        }

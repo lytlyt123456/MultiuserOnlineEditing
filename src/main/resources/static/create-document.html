@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新建文档 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/create-document-style.css">
+    <!-- 引入Quill富文本编辑器 -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <!-- 引入Markdown编辑器样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>新建文档 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="my-documents.html" class="btn">返回文档列表</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="editor-container">
+                <!-- 当前文件夹信息 -->
+                <div id="currentFolderInfo" class="current-folder" style="display: none;">
+                    <strong>当前文件夹:</strong> <span id="currentFolderName"></span>
+                </div>
+
+                <form id="createDocumentForm" onsubmit="return false;">
+                    <!-- 基础信息 -->
+                    <div class="form-group">
+                        <label for="title">文档标题 *</label>
+                        <input type="text" id="title" placeholder="请输入文档标题" required>
+                    </div>
+
+                    <!-- 文档类型选择 -->
+                    <div class="form-group">
+                        <label for="documentType">文档类型 *</label>
+                        <select id="documentType" required>
+                            <option value="">请选择文档类型</option>
+                            <option value="RICH_TEXT">富文本</option>
+                            <option value="MARKDOWN">Markdown</option>
+                        </select>
+                    </div>
+
+                    <!-- 标签输入 -->
+                    <div class="form-group">
+                        <label for="tagInput">标签</label>
+                        <div class="tags-input">
+                            <div id="tagsContainer"></div>
+                            <input type="text" id="tagInput" placeholder="输入标签后按回车添加">
+                        </div>
+                    </div>
+
+                    <!-- 编辑器区域 -->
+                    <div class="form-group">
+                        <label>文档内容</label>
+                        <div class="editor-tabs">
+                            <button type="button" class="editor-tab active" data-tab="richText">富文本编辑器</button>
+                            <button type="button" class="editor-tab" data-tab="markdown">Markdown编辑器</button>
+                        </div>
+
+                        <div class="editor-content">
+                            <!-- 富文本编辑器 -->
+                            <div class="editor-panel active" id="richTextPanel">
+                                <div id="richTextEditor"></div>
+                            </div>
+
+                            <!-- Markdown编辑器 -->
+                            <div class="editor-panel" id="markdownPanel">
+                                <div class="split-layout">
+                                    <div>
+                                        <label style="font-size: 0.9rem; color: #666;">编辑区</label>
+                                        <label for="markdownEditor"></label><textarea id="markdownEditor" placeholder="请输入Markdown内容..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.9rem; color: #666;">预览区</label>
+                                        <div id="markdownPreview" class="markdown-preview"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 操作按钮 -->
+                    <div class="action-buttons">
+                        <button type="button" onclick="createDocument()" class="btn btn-primary">创建文档</button>
+                        <button type="button" onclick="goBack()" class="btn btn-outline">取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 引入Quill富文本编辑器 -->
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<!-- 引入Markdown编辑器 -->
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<!-- 引入Marked用于Markdown预览 -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let quill = null;
+    let easyMDE = null;
+    let currentFolderId = null;
+    let tags = [];
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 获取URL参数中的文件夹ID
+        const urlParams = new URLSearchParams(window.location.search);
+        currentFolderId = urlParams.get('folderId');
+
+        // 如果有文件夹ID，显示文件夹信息
+        if (currentFolderId) {
+            loadFolderInfo(currentFolderId);
+        }
+
+        initializeEditors();
+        setupEventListeners();
+    });
+
+    // 初始化编辑器
+    function initializeEditors() {
+        // 初始化富文本编辑器
+        quill = new Quill('#richTextEditor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['link', 'image'],
+                    ['clean']
+                ]
+            },
+            placeholder: '请输入文档内容...'
+        });
+
+        // 初始化Markdown编辑器
+        easyMDE = new EasyMDE({
+            element: document.getElementById('markdownEditor'),
+            spellChecker: false,
+            autosave: {
+                enabled: false
+            },
+            placeholder: '请输入Markdown内容...',
+            toolbar: [
+                'bold', 'italic', 'heading', '|',
+                'code', 'quote', 'unordered-list', 'ordered-list', '|',
+                'link', 'image', '|',
+                'preview', 'side-by-side', 'fullscreen', '|',
+                'guide'
+            ]
+        });
+
+        // 监听Markdown内容变化，更新预览
+        easyMDE.codemirror.on('change', function() {
+            updateMarkdownPreview();
+        });
+    }
+
+    // 设置事件监听器
+    function setupEventListeners() {
+        // 标签输入
+        const tagInput = document.getElementById('tagInput');
+        tagInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addTag(this.value.trim());
+                this.value = '';
+            }
+        });
+
+        // 文档类型切换
+        document.getElementById('documentType').addEventListener('change', function() {
+            const type = this.value;
+            if (type === 'RICH_TEXT') {
+                switchToEditor('richText');
+            } else if (type === 'MARKDOWN') {
+                switchToEditor('markdown');
+            }
+        });
+
+        // 编辑器标签切换
+        document.querySelectorAll('.editor-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const tabName = this.getAttribute('data-tab');
+                switchToEditor(tabName);
+            });
+        });
+    }
+
+    // 切换编辑器
+    function switchToEditor(editorType) {
+        // 更新标签状态
+        document.querySelectorAll('.editor-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${editorType}"]`).classList.add('active');
+
+        // 更新面板状态
+        document.querySelectorAll('.editor-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+        document.getElementById(`${editorType}Panel`).classList.add('active');
+
+        // 更新文档类型选择
+        document.getElementById('documentType').value = editorType === 'richText' ? 'RICH_TEXT' : 'MARKDOWN';
+    }
+
+    // 更新Markdown预览
+    function updateMarkdownPreview() {
+        const content = easyMDE.value();
+        const preview = document.getElementById('markdownPreview');
+        preview.innerHTML = marked.parse(content || '');
+    }
+
+    // 添加标签
+    function addTag(tagName) {
+        if (!tagName) return;
+
+        if (tags.includes(tagName)) {
+            alert('标签已存在');
+            return;
+        }
+
+        tags.push(tagName);
+        renderTags();
+    }
+
+    // 移除标签
+    function removeTag(tagName) {
+        tags = tags.filter(tag => tag !== tagName);
+        renderTags();
+    }
+
+    // 渲染标签
+    function renderTags() {
+        const container = document.getElementById('tagsContainer');
+        container.innerHTML = tags.map(tag => `
+            <div class="tag">
+                ${tag}
+                <span class="tag-remove" onclick="removeTag('${tag}')">×</span>
+            </div>
+        `).join('');
+    }
+
+    // 加载文件夹信息
+    async function loadFolderInfo(folderId) {
+        try {
+            const response = await folderAPI.getFolderDetail(folderId);
+            if (response.success) {
+                const folderInfo = document.getElementById('currentFolderInfo');
+                const folderName = document.getElementById('currentFolderName');
+
+                folderName.textContent = response.data.name;
+                folderInfo.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('加载文件夹信息失败:', error);
+        }
+    }
+
+    // 创建文档
+    async function createDocument() {
+        const title = document.getElementById('title').value.trim();
+        const type = document.getElementById('documentType').value;
+
+        if (!title) {
+            alert('请输入文档标题');
+            return;
+        }
+
+        if (!type) {
+            alert('请选择文档类型');
+            return;
+        }
+
+        let content = '';
+        if (type === 'RICH_TEXT') {
+            content = quill.root.innerHTML;
+        } else if (type === 'MARKDOWN') {
+            content = easyMDE.value();
+        }
+
+        try {
+            const documentData = {
+                title: title,
+                content: content,
+                type: type,
+                folderId: currentFolderId ? parseInt(currentFolderId) : null,
+                tagNames: tags
+            };
+
+            const response = await documentAPI.createDocument(documentData);
+
+            if (response.success) {
+                alert('文档创建成功！');
+                // 跳转到文档编辑页面或文档列表
+                if (response.data && response.data.documentId) {
+                    window.location.href = `edit-document.html?id=${response.data.documentId}`;
+                } else {
+                    window.location.href = 'my-documents.html';
+                }
+            } else {
+                alert('创建失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('创建文档错误:', error);
+            alert('创建失败: ' + error.message);
+        }
+    }
+
+    // 返回上一页
+    function goBack() {
+        window.history.back();
+    }
+</script>
+</body>
+</html>

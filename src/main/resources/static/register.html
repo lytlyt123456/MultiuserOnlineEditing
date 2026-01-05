@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户注册 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="auth-container">
+    <div class="auth-form">
+        <h2>用户注册</h2>
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="username">用户名:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">邮箱:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">手机号:</label>
+                <input type="text" id="phone" name="phone">
+            </div>
+
+            <div class="form-group">
+                <label for="password">密码:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">注册</button>
+        </form>
+
+        <div id="message" class="message"></div>
+
+        <p class="auth-link">
+            已有账号? <a href="login.html">立即登录</a>
+        </p>
+    </div>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script>
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = '注册中...';
+        submitBtn.disabled = true;
+
+        const formData = {
+            username: document.getElementById('username').value,
+            email: document.getElementById('email').value,
+            phone: document.getElementById('phone').value,
+            password: document.getElementById('password').value
+        };
+
+        console.log('提交数据:', formData);
+
+        try {
+            const result = await auth.register(formData);
+            console.log('注册结果:', result);
+
+            if (result.success) {
+                showMessage('message', '注册成功！正在跳转到登录页...', 'success');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 2000);
+            } else {
+                showMessage('message', result.message || '注册失败，请重试', 'error');
+            }
+        } catch (error) {
+            console.error('注册异常:', error);
+            showMessage('message', '注册过程中发生错误，请重试', 'error');
+        } finally {
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // 显示消息的函数
+    function showMessage(elementId, text, type = 'error') {
+        const messageEl = document.getElementById(elementId);
+        if (messageEl) {
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+            messageEl.style.display = 'block';
+
+            if (type === 'error') {
+                // 错误消息不自动隐藏
+                setTimeout(() => {
+                    messageEl.style.display = 'none';
+                }, 5000);
+            }
+        }
+    }
+</script>
+</body>
+</html>

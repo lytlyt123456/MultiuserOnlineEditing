@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑文件夹 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/edit-folder-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>编辑文件夹 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="my-documents.html" class="btn">返回文档列表</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="form-container">
+                <!-- 文件夹基本信息 -->
+                <div class="folder-info" id="folderInfo">
+                    <div class="folder-info-item">
+                        <strong>创建时间:</strong> <span id="createdAt">加载中...</span>
+                    </div>
+                    <div class="folder-info-item">
+                        <strong>最后更新:</strong> <span id="updatedAt">加载中...</span>
+                    </div>
+                    <div class="folder-info-item">
+                        <strong>父文件夹:</strong> <span id="parentFolder">加载中...</span>
+                    </div>
+                </div>
+
+                <form id="editFolderForm" onsubmit="return false;">
+                    <div class="form-group">
+                        <label for="name">文件夹名称 *</label>
+                        <input type="text" id="name" placeholder="请输入文件夹名称" required maxlength="100">
+                        <div class="form-help">文件夹名称不能超过100个字符</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">文件夹描述</label>
+                        <textarea id="description" placeholder="请输入文件夹描述（可选）" maxlength="500"></textarea>
+                        <div class="form-help">文件夹描述不能超过500个字符</div>
+                    </div>
+
+                    <!-- 隐藏的文件夹ID字段 -->
+                    <input type="hidden" id="folderId">
+
+                    <div class="action-buttons">
+                        <button type="button" onclick="updateFolder()" class="btn btn-primary">保存修改</button>
+                        <button type="button" onclick="goBack()" class="btn btn-outline">取消</button>
+                    </div>
+                </form>
+
+                <!-- 危险操作区域 -->
+                <div class="danger-zone">
+                    <h3>危险操作</h3>
+                    <p>删除文件夹将永久移除该文件夹及其所有内容。此操作不可撤销。</p>
+                    <button type="button" onclick="deleteFolder()" class="btn btn-delete">删除文件夹</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let currentFolderId = null;
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 获取URL参数中的文件夹ID
+        const urlParams = new URLSearchParams(window.location.search);
+        currentFolderId = urlParams.get('id');
+
+        if (!currentFolderId) {
+            alert('无效的文件夹ID');
+            window.location.href = 'my-documents.html';
+            return;
+        }
+
+        // 设置隐藏字段
+        document.getElementById('folderId').value = currentFolderId;
+
+        // 加载文件夹详情
+        loadFolderDetail(currentFolderId);
+    });
+
+    // 加载文件夹详情
+    async function loadFolderDetail(folderId) {
+        try {
+            const response = await folderAPI.getFolderDetail(folderId);
+            if (response.success) {
+                const folder = response.data;
+                populateForm(folder);
+            } else {
+                alert('加载文件夹详情失败: ' + response.message);
+                window.location.href = 'my-documents.html';
+            }
+        } catch (error) {
+            console.error('加载文件夹详情错误:', error);
+            alert('加载文件夹详情失败: ' + error.message);
+            window.location.href = 'my-documents.html';
+        }
+    }
+
+    // 填充表单数据
+    function populateForm(folder) {
+        // 填充表单字段
+        document.getElementById('name').value = folder.name || '';
+        document.getElementById('description').value = folder.description || '';
+
+        // 更新文件夹信息显示
+        document.getElementById('createdAt').textContent = new Date(folder.created_at).toLocaleString();
+        document.getElementById('updatedAt').textContent = new Date(folder.updated_at).toLocaleString();
+
+        // 显示父文件夹信息
+        if (folder.parent_name && folder.parent_name !== 'null') {
+            document.getElementById('parentFolder').textContent = folder.parent_name;
+        } else {
+            document.getElementById('parentFolder').textContent = '根目录';
+        }
+    }
+
+    // 更新文件夹
+    async function updateFolder() {
+        const name = document.getElementById('name').value.trim();
+        const description = document.getElementById('description').value.trim();
+        const folderId = document.getElementById('folderId').value;
+
+        if (!name) {
+            alert('请输入文件夹名称');
+            return;
+        }
+
+        try {
+            const updateData = {
+                name: name,
+                description: description || ''
+            };
+
+            const response = await folderAPI.updateFolder(folderId, updateData);
+
+            if (response.success) {
+                alert('文件夹更新成功！');
+                window.location.href = 'my-documents.html';
+            } else {
+                alert('更新失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('更新文件夹错误:', error);
+            alert('更新失败: ' + error.message);
+        }
+    }
+
+    // 删除文件夹
+    async function deleteFolder() {
+        const folderId = document.getElementById('folderId').value;
+        const folderName = document.getElementById('name').value;
+
+        if (!confirm(`确定要删除文件夹 "${folderName}" 吗？此操作不可撤销，且会删除文件夹内的所有内容。`)) {
+            return;
+        }
+
+        try {
+            const response = await folderAPI.deleteFolder(folderId);
+
+            if (response.success) {
+                alert('文件夹删除成功！');
+                // 返回到文档列表页面
+                window.location.href = 'my-documents.html';
+            } else {
+                alert('删除失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('删除文件夹错误:', error);
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    // 返回上一页
+    function goBack() {
+        window.history.back();
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI智能搜索 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/search-documents-ai-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>AI智能搜索 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <button onclick="goBack()" class="btn">返回</button>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="search-container">
+                <div class="search-header">
+                    <h2>AI智能文档搜索</h2>
+                    <p>基于内容理解的相关度搜索，找到最匹配的文档</p>
+                </div>
+
+                <div class="search-box">
+                    <div class="search-input-group">
+                        <input type="text" id="searchInput" class="search-input"
+                               placeholder="请输入搜索内容..."
+                               onkeypress="handleKeyPress(event)">
+                        <button id="searchBtn" class="search-btn" onclick="performSearch()">搜索</button>
+                    </div>
+                    <div class="search-tips">
+                        💡 提示：可以输入完整的问题描述，AI会理解您的搜索意图
+                    </div>
+                </div>
+
+                <div id="resultsArea" style="display: none;">
+                    <div class="results-container">
+                        <div class="results-header">
+                            <h3>搜索结果</h3>
+                            <div class="results-count" id="resultsCount">找到 0 个文档</div>
+                        </div>
+                        <div class="results-list" id="resultsList">
+                            <!-- 搜索结果将在这里显示 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+
+<script>
+    let currentSearchTerm = '';
+    let isLoading = false;
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 聚焦搜索框
+        document.getElementById('searchInput').focus();
+    });
+
+    // 处理键盘事件
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            performSearch();
+        }
+    }
+
+    // 执行搜索
+    async function performSearch() {
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const searchTerm = searchInput.value.trim();
+
+        if (!searchTerm) {
+            alert('请输入搜索内容');
+            return;
+        }
+
+        if (isLoading) return;
+
+        // 设置加载状态
+        isLoading = true;
+        searchBtn.disabled = true;
+        searchBtn.textContent = '搜索中...';
+        currentSearchTerm = searchTerm;
+
+        try {
+            // 显示加载状态
+            showLoading();
+
+            // 调用AI搜索API
+            const response = await documentAPI.aiSearch(searchTerm);
+
+            if (response.success) {
+                displaySearchResults(response.data.documents);
+            } else {
+                showError('搜索失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('搜索错误:', error);
+            showError('搜索失败: ' + error.message);
+        } finally {
+            // 恢复按钮状态
+            isLoading = false;
+            searchBtn.disabled = false;
+            searchBtn.textContent = '搜索';
+        }
+    }
+
+    // 显示加载状态
+    function showLoading() {
+        const resultsArea = document.getElementById('resultsArea');
+        const resultsList = document.getElementById('resultsList');
+
+        resultsArea.style.display = 'block';
+        resultsList.innerHTML = `
+            <div class="loading">
+                <div>🔍 AI正在智能分析搜索内容...</div>
+                <div style="margin-top: 0.5rem; font-size: 0.9rem; color: #999;">
+                    基于TF-IDF算法计算文档相关度
+                </div>
+            </div>
+        `;
+        document.getElementById('resultsCount').textContent = '搜索中...';
+    }
+
+    // 显示搜索结果
+    function displaySearchResults(documents) {
+        const resultsArea = document.getElementById('resultsArea');
+        const resultsList = document.getElementById('resultsList');
+        const resultsCount = document.getElementById('resultsCount');
+
+        resultsArea.style.display = 'block';
+
+        if (!documents || documents.length === 0) {
+            resultsList.innerHTML = `
+                <div class="no-results">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                    <div>没有找到相关的文档</div>
+                    <div style="margin-top: 0.5rem; font-size: 0.9rem; color: #999;">
+                        尝试使用其他关键词或更详细的描述
+                    </div>
+                </div>
+            `;
+            resultsCount.textContent = '找到 0 个文档';
+            return;
+        }
+
+        resultsCount.textContent = `找到 ${documents.length} 个文档`;
+
+        let html = '';
+        documents.forEach((doc, index) => {
+            // 截取内容预览
+            const contentPreview = doc.content ?
+                doc.content.replace(/<[^>]+>/g, '').substring(0, 150) + '...' :
+                '无内容';
+
+            // 格式化时间
+            const updateTime = new Date(doc.updatedAt).toLocaleString();
+
+            html += `
+                <div class="result-item" onclick="openDocument(${doc.id})">
+                    <div class="result-title">
+                        ${doc.title || '未命名文档'}
+                        <span class="result-type">${getDocumentTypeText(doc.type)}</span>
+                    </div>
+                    <div class="result-content">${contentPreview}</div>
+                    <div class="result-meta">
+                        <span>所有者: ${doc.owner}</span>
+                        <span>更新: ${updateTime}</span>
+                        <span>版本: v${doc.version || 1}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        resultsList.innerHTML = html;
+    }
+
+    // 获取文档类型文本
+    function getDocumentTypeText(type) {
+        const typeMap = {
+            'RICH_TEXT': '富文本',
+            'MARKDOWN': 'Markdown'
+        };
+        return typeMap[type] || type;
+    }
+
+    // 打开文档
+    function openDocument(documentId) {
+        window.location.href = `edit-document.html?id=${documentId}`;
+    }
+
+    // 显示错误信息
+    function showError(message) {
+        const resultsArea = document.getElementById('resultsArea');
+        const resultsList = document.getElementById('resultsList');
+
+        resultsArea.style.display = 'block';
+        resultsList.innerHTML = `
+            <div class="error-message">
+                ${message}
+            </div>
+        `;
+        document.getElementById('resultsCount').textContent = '搜索出错';
+    }
+
+    // 返回上一页
+    function goBack() {
+        window.history.back();
+    }
+</script>
+</body>
+</html>

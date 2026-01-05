@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>填写问卷 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/answer-survey-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>填写问卷 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <button onclick="goBack()" class="btn">返回工作台</button>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div id="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>加载问卷信息...</p>
+            </div>
+
+            <div id="surveyContainer" style="display: none;">
+                <!-- 问卷内容将在这里动态生成 -->
+            </div>
+
+            <div id="notEligible" style="display: none; text-align: center; padding: 3rem;">
+                <h2>❌ 您没有资格填写问卷</h2>
+                <p>要求：必须是编辑者角色且操作日志超过100条</p>
+                <div style="margin-top: 2rem;">
+                    <button onclick="goBack()" class="btn btn-primary">返回工作台</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/survey.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    let questions = [];
+    let existingAnswers = {};
+    let currentUserId = null;
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 获取当前用户ID
+        try {
+            const response = await user.getProfile();
+            if (response.success) {
+                const userData = response.data;
+                currentUserId = userData.userId;
+            }
+        } catch (error) {
+            console.error('获取用户信息失败:', error);
+        }
+
+        // 检查资格并加载问卷
+        await checkEligibilityAndLoadSurvey();
+    });
+
+    async function checkEligibilityAndLoadSurvey() {
+        try {
+            // 检查资格
+            const eligibilityResponse = await surveyAPI.checkEligibility();
+
+            if (!eligibilityResponse.success || !eligibilityResponse.data.eligible) {
+                showNotEligible();
+                return;
+            }
+
+            // 获取问卷问题
+            const questionsResponse = await surveyAPI.getSurveyQuestions();
+            if (!questionsResponse.success) {
+                throw new Error(questionsResponse.message);
+            }
+
+            questions = questionsResponse.data.questions;
+
+            // 显示问卷
+            displaySurvey();
+
+        } catch (error) {
+            console.error('加载问卷错误:', error);
+            document.getElementById('loading').innerHTML =
+                `<p style="color: #dc3545;">加载问卷失败: ${error.message}</p>
+                 <button onclick="goBack()" class="btn btn-primary">返回</button>`;
+        }
+    }
+
+    function displaySurvey() {
+        const container = document.getElementById('surveyContainer');
+        const loading = document.getElementById('loading');
+
+        // 构建问卷内容
+        let html = `
+            <div class="survey-container">
+                <div class="survey-header">
+                    <h1>用户满意度调查问卷</h1>
+                    <div class="survey-info">
+                        <p>请仔细阅读每个问题，根据您的真实感受进行回答。您的反馈对我们改进系统非常重要。</p>
+                    </div>
+                    <div class="survey-stats">
+                        <div class="stat-item">
+                            <div class="stat-value">${questions.length}</div>
+                            <div class="stat-label">总问题数</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${questions.filter(q => q.isLikert).length}</div>
+                            <div class="stat-label">评分问题</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${questions.filter(q => !q.isLikert).length}</div>
+                            <div class="stat-label">文字问题</div>
+                        </div>
+                    </div>
+                </div>
+                <form id="surveyForm" onsubmit="return submitSurvey(event)">
+        `;
+
+        // 添加每个问题
+        questions.forEach((question, index) => {
+            console.log(`问题 ${index}:`, question);
+
+            if (question.isLikert) {
+                html += `
+                    <div class="question-group likert">
+                        <h3>
+                            <span class="question-index">${index + 1}</span>
+                            ${question.content}
+                            <span class="question-type">五点量表</span>
+                        </h3>
+                        <div class="likert-options">
+                            ${[1,2,3,4,5].map(score => `
+                                <label class="likert-option">
+                                    <input type="radio"
+                                           name="question_${index}"
+                                           value="${score}"
+                                           required>
+                                    <div class="likert-label">${score}</div>
+                                    <div class="likert-description">
+                                        ${getLikertDescription(score)}
+                                    </div>
+                                </label>
+                            `).join('')}
+                        </div>
+                        <div id="error_${index}" class="error-message">请选择评分</div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="question-group text">
+                        <h3>
+                            <span class="question-index">${index + 1}</span>
+                            ${question.content}
+                            <span class="question-type">文字回答</span>
+                        </h3>
+                        <textarea class="text-answer"
+                                  name="question_${index}"
+                                  placeholder="请输入您的回答..."
+                                  required></textarea>
+                        <div id="error_${index}" class="error-message">请填写回答</div>
+                    </div>
+                `;
+            }
+        });
+
+        html += `
+                    <div class="action-buttons">
+                        <button type="submit" class="btn-primary">提交问卷</button>
+                        <button type="button" onclick="goBack()" class="btn-outline">取消</button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        container.innerHTML = html;
+        loading.style.display = 'none';
+        container.style.display = 'block';
+    }
+
+    function getLikertDescription(score) {
+        const descriptions = {
+            1: '非常不满意',
+            2: '不太满意',
+            3: '一般',
+            4: '比较满意',
+            5: '非常满意'
+        };
+        return descriptions[score] || '';
+    }
+
+    async function submitSurvey(event) {
+        event.preventDefault();
+
+        // 验证所有必填项
+        let isValid = true;
+        const form = document.getElementById('surveyForm');
+        const formData = new FormData(form);
+
+        // 清空所有错误信息
+        questions.forEach((_, index) => {
+            document.getElementById(`error_${index}`).style.display = 'none';
+        });
+
+        // 收集答案
+        const answers = {};
+
+        for (let i = 0; i < questions.length; i++) {
+            const question = questions[i];
+
+            if (question.isLikert) {
+                const value = formData.get(`question_${i}`);
+                if (!value) {
+                    document.getElementById(`error_${i}`).style.display = 'block';
+                    document.getElementById(`error_${i}`).textContent = '请选择评分';
+                    isValid = false;
+                } else {
+                    answers[i] = parseInt(value);
+                }
+            } else {
+                const value = formData.get(`question_${i}`)?.trim();
+                if (!value) {
+                    document.getElementById(`error_${i}`).style.display = 'block';
+                    document.getElementById(`error_${i}`).textContent = '请填写回答';
+                    isValid = false;
+                } else if (value.length < 10) {
+                    document.getElementById(`error_${i}`).style.display = 'block';
+                    document.getElementById(`error_${i}`).textContent = '回答至少需要10个字符';
+                    isValid = false;
+                } else {
+                    answers[i] = value;
+                }
+            }
+        }
+
+        if (!isValid) {
+            // 滚动到第一个错误
+            const firstError = document.querySelector('.error-message[style*="display: block"]');
+            if (firstError) {
+                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return false;
+        }
+
+        // 提交问卷
+        try {
+            const response = await surveyAPI.submitSurvey(answers);
+
+            if (response.success) {
+                // 显示成功消息
+                alert('问卷提交成功！感谢您的反馈。');
+
+                // 返回工作台
+                goBack();
+            } else {
+                alert('提交失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('提交问卷错误:', error);
+            alert('提交失败: ' + error.message);
+        }
+
+        return false;
+    }
+
+    function showNotEligible() {
+        const loading = document.getElementById('loading');
+        const notEligible = document.getElementById('notEligible');
+
+        loading.style.display = 'none';
+        notEligible.style.display = 'block';
+    }
+
+    function goBack() {
+        window.location.href = 'dashboard.html';
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑资料 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>协作编辑系统 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">编辑资料</span>
+                    <a href="dashboard.html" class="btn btn-secondary">返回工作台</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="profile-container">
+                <div class="profile-header">
+                    <h2>编辑个人资料</h2>
+                </div>
+
+                <div class="profile-form">
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label for="fullName">姓名</label>
+                            <input type="text" id="fullName" name="fullName"
+                                   placeholder="请输入您的姓名">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="bio">个人简介</label>
+                            <textarea id="bio" name="bio"
+                                      placeholder="介绍一下自己吧..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="phone">手机号</label>
+                            <input type="text" id="phone" name="phone"
+                                   placeholder="请输入手机号码">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="email">邮箱</label>
+                            <input type="text" id="email" name="email"
+                                   placeholder="请输入邮箱">
+                        </div>
+
+                        <div class="avatar-section">
+                            <h3 style="margin-bottom: 1rem;">头像设置</h3>
+
+                            <div class="avatar-preview" id="avatarPreview">
+                                <!-- 头像预览区域，由JavaScript动态填充 -->
+                            </div>
+
+                            <div class="avatar-actions">
+                                <input type="file" id="fileInput" accept="image/*">
+                                <button type="button" onclick="document.getElementById('fileInput').click()"
+                                        class="btn btn-outline">
+                                    📷 选择图片
+                                </button>
+                                <button type="button" onclick="removeAvatar()" class="btn btn-danger">
+                                    🗑️ 移除头像
+                                </button>
+                            </div>
+
+                            <div class="field-hint">
+                                支持 JPG、PNG 格式，文件大小不超过 10MB
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                保存更改
+                            </button>
+                        </div>
+                    </form>
+
+                    <div id="message" class="message"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script>
+    let currentAvatarFile = null;
+    let currentAvatarPath = '';
+
+    // 页面加载时获取并填充用户信息
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        await loadUserProfile();
+        await displayAvatar();
+        setupFileUpload();
+    });
+
+    // 加载用户资料并填充表单
+    async function loadUserProfile() {
+        try {
+            const response = await user.getProfile();
+            console.log('用户资料响应:', response);
+
+            if (response.success && response.data) {
+                const userData = response.data;
+                fillFormWithUserData(userData);
+                showMessage('用户资料加载成功', 'success');
+            } else {
+                showMessage('加载用户资料失败: ' + (response.message || '未知错误'), 'error');
+            }
+        } catch (error) {
+            console.error('加载用户资料异常:', error);
+            showMessage('加载用户资料时发生错误: ' + error.message, 'error');
+        } finally {
+            const submitBtn = document.querySelector('button[type="submit"]');
+            submitBtn.textContent = '保存更改';
+            submitBtn.disabled = false;
+        }
+    }
+
+    // 使用用户数据填充表单
+    function fillFormWithUserData(userData) {
+        // 填充姓名 - 如果为空则显示提示文本
+        const fullNameInput = document.getElementById('fullName');
+        if (userData.full_name) {
+            fullNameInput.value = userData.full_name;
+        } else {
+            fullNameInput.placeholder = '请输入您的姓名';
+        }
+
+        // 填充个人简介 - 如果为空则显示提示文本
+        const bioInput = document.getElementById('bio');
+        if (userData.biography) {
+            bioInput.value = userData.biography;
+        } else {
+            bioInput.placeholder = '介绍一下自己吧...';
+        }
+
+        // 填充手机号 - 如果为空则显示提示文本
+        const phoneInput = document.getElementById('phone');
+        if (userData.phone) {
+            phoneInput.value = userData.phone;
+        } else {
+            phoneInput.placeholder = '请输入手机号码';
+        }
+
+        // 填充邮箱 - 如果为空则显示提示文本
+        const emailInput = document.getElementById('email');
+        if (userData.email) {
+            emailInput.value = userData.email;
+        } else {
+            emailInput.placeholder = '请输入邮箱';
+        }
+
+        console.log('表单填充完成:', {
+            fullName: userData.full_name || '空',
+            bio: userData.biography || '空',
+            phone: userData.phone || '空'
+        });
+    }
+
+    // 在进入该页面时显示用户的已有头像
+    async function displayAvatar() {
+        let avatarPath = '';
+        try {
+            // 从API获取完整的用户信息
+            const response = await user.getProfile();
+            console.log('获取用户资料响应:', response);
+
+            if (response.success && response.data) {
+                const userData = response.data;
+                console.log('user data', userData);
+                avatarPath = userData.avatar_path || '';
+                avatarPath = getFileNameFromPath(avatarPath);
+                console.log('头像路径:', avatarPath);
+            } else {
+                console.error('获取用户资料失败:', response.message);
+                showErrorMessage('获取用户信息失败: ' + (response.message || '请检查网络连接'));
+            }
+        } catch (error) {
+            console.error('加载用户信息异常:', error);
+            showErrorMessage('加载用户信息时发生错误: ' + error.message);
+        }
+
+        const avatarPreview = document.getElementById('avatarPreview');
+
+        if (avatarPath) {
+            // 显示现有头像
+            // 头像文件可以通过 /uploads/avatars/ 路径访问
+			let host = '';
+			if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+				host = 'http://localhost:8080';
+			} else {
+				host = `${window.location.protocol}//${window.location.host}`;
+			}
+            const avatarUrl = `${host}/uploads/avatars/${avatarPath}`;
+            avatarPreview.innerHTML = `
+                <img src="${avatarUrl}" alt="用户头像" class="avatar-image"
+                     onerror="this.style.display='none'; document.getElementById('defaultAvatar').style.display='flex';">
+                <div id="defaultAvatar" class="avatar-placeholder" style="display: none;">👤</div>
+            `;
+            currentAvatarPath = avatarUrl;
+        } else {
+            // 显示默认头像占位符
+            avatarPreview.innerHTML = `
+                <div class="avatar-placeholder">👤</div>
+                <div class="field-hint" style="margin-top: 0.5rem;">暂无头像</div>
+            `;
+        }
+    }
+
+    // 从文件路径中提取文件名
+    function getFileNameFromPath(path) {
+        if (!path) return '';
+        return path.split('/').pop().split('\\').pop();
+    }
+
+    // 设置文件上传监听
+    function setupFileUpload() {
+        const fileInput = document.getElementById('fileInput');
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                // 验证文件类型
+                if (!file.type.startsWith('image/')) {
+                    showMessage('请选择图片文件', 'error');
+                    return;
+                }
+
+                // 验证文件大小 (10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    showMessage('文件大小不能超过10MB', 'error');
+                    return;
+                }
+
+                // 预览图片
+                previewImage(file);
+                currentAvatarFile = file;
+
+                // 上传图片
+                // uploadAvatar(file);
+            }
+        });
+    }
+
+    // 预览图片
+    function previewImage(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const avatarPreview = document.getElementById('avatarPreview');
+            avatarPreview.innerHTML = `
+                <img src="${e.target.result}" alt="头像预览" class="avatar-image">
+            `;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function removeAvatarPreview() {
+        const avatarPreview = document.getElementById('avatarPreview');
+        avatarPreview.innerHTML = `
+                <div class="avatar-placeholder">👤</div>
+                <div class="field-hint" style="margin-top: 0.5rem;">暂无头像</div>
+            `;
+    }
+
+    // 上传头像
+    async function uploadAvatar(file) {
+        try {
+            const response = await user.uploadAvatar(file);
+
+            console.log('头像上传响应:', response);
+
+            if (response.success) {
+                showMessage('头像上传成功！', 'success');
+
+                // 更新本地用户数据
+                await updateLocalUserData();
+            } else {
+                showMessage('头像上传失败: ' + (response.message || '未知错误'), 'error');
+            }
+        } catch (error) {
+            console.error('头像上传异常:', error);
+            showMessage('头像上传时发生错误: ' + error.message, 'error');
+        }
+    }
+
+    // 移除头像
+    async function removeAvatar() {
+        if (!currentAvatarFile && !currentAvatarPath) {
+            showMessage('当前没有设置头像', 'info');
+            return;
+        }
+
+        if (confirm('确定要移除当前头像吗？')) {
+            try {
+                // 这里需要实现移除头像的后端API
+                // const response = await user.removeAvatar();
+                // console.log('获取用户资料响应:', response);
+
+                currentAvatarFile = null;
+                currentAvatarPath = '';
+
+                // 暂时先重置预览
+                removeAvatarPreview();
+                showMessage('头像已移除', 'success');
+            } catch (error) {
+                console.error('移除头像异常:', error);
+                showMessage('移除头像时发生错误: ' + error.message, 'error');
+            }
+        }
+    }
+
+
+    // 表单提交处理
+    document.getElementById('profileForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = '保存中...';
+        submitBtn.disabled = true;
+
+        const formData = {
+            fullName: document.getElementById('fullName').value.trim(),
+            bio: document.getElementById('bio').value.trim(),
+            phone: document.getElementById('phone').value.trim(),
+            email: document.getElementById('email').value.trim()
+        };
+
+        console.log('提交的资料数据:', formData);
+
+        try {
+            if (currentAvatarFile) {
+                await uploadAvatar(currentAvatarFile);
+            } else if (!currentAvatarPath) {
+                try {
+                    // 这里需要实现移除头像的后端API
+                    const response = await user.removeAvatar();
+                    console.log('获取用户资料响应:', response);
+                } catch (error) {
+                    console.error('移除头像异常:', error);
+                    showMessage('移除头像时发生错误: ' + error.message, 'error');
+                }
+            }
+
+            const response = await user.updateProfile(formData);
+            console.log('更新资料响应:', response);
+
+            if (response.success) {
+                showMessage('资料更新成功！', 'success');
+                // 保存更新后的信息到本地存储
+                await updateLocalUserData();
+
+                // 2秒后返回工作台
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 2000);
+            } else {
+                showMessage('更新失败: ' + (response.message || '未知错误'), 'error');
+            }
+        } catch (error) {
+            console.error('更新资料异常:', error);
+            showMessage('更新资料时发生错误: ' + error.message, 'error');
+        } finally {
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // 更新本地存储的用户数据
+    async function updateLocalUserData() {
+        try {
+            const response = await user.getProfile();
+            if (response.success && response.data) {
+                const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+                // 合并更新后的数据
+                const updatedUser = {
+                    ...currentUser,
+                    ...response.data
+                };
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+            }
+        } catch (error) {
+            console.error('更新本地用户数据失败:', error);
+        }
+    }
+
+    // 显示消息
+    function showMessage(text, type) {
+        const messageEl = document.getElementById('message');
+        messageEl.textContent = text;
+        messageEl.className = `message ${type}`;
+        messageEl.style.display = 'block';
+
+        if (type === 'success') {
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 3000);
+        } else {
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 5000);
+        }
+    }
+
+    // 返回上一页
+    function goBack() {
+        if (confirm('确定要放弃已做的修改吗？')) {
+            window.location.href = 'dashboard.html';
+        }
+    }
+
+    // 监听输入框变化，提供实时反馈
+    document.querySelectorAll('input, textarea').forEach(input => {
+        input.addEventListener('input', function() {
+            // 移除错误状态
+            this.style.borderColor = '';
+
+            // 如果用户开始输入，移除placeholder样式
+            if (this.value.trim()) {
+                this.classList.remove('empty-field');
+            } else {
+                this.classList.add('empty-field');
+            }
+        });
+
+        input.addEventListener('focus', function() {
+            this.style.borderColor = '#007bff';
+        });
+
+        input.addEventListener('blur', function() {
+            this.style.borderColor = '';
+        });
+    });
+</script>
+</body>
+</html>

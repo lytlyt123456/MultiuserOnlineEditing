@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户角色管理 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/change-user-role-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>协作编辑系统 - 管理员 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">用户角色管理</span>
+                    <a href="dashboard.html" class="btn btn-secondary">返回工作台</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="role-management-container">
+                <div class="role-header">
+                    <h2>用户角色管理</h2>
+                    <p>管理用户角色和权限</p>
+                </div>
+
+                <div class="role-content">
+                    <!-- 升级申请处理部分 -->
+                    <div class="section">
+                        <h3>角色升级申请</h3>
+                        <p>处理用户从查看者升级为编辑者的申请</p>
+
+                        <div class="requests-list" id="upgradeRequestsList">
+                            <div class="loading-state" id="requestsLoading">
+                                正在加载升级申请...
+                            </div>
+                            <div class="empty-state" id="noRequests" style="display: none;">
+                                <div class="icon">📝</div>
+                                <p>暂无角色升级申请</p>
+                            </div>
+                            <!-- 申请列表将通过JavaScript动态填充 -->
+                        </div>
+                    </div>
+
+                    <!-- 用户搜索和角色更改部分 -->
+                    <div class="section">
+                        <h3>用户搜索和角色更改</h3>
+
+                        <div class="search-section">
+                            <div class="search-form">
+                                <div class="form-group">
+                                    <label for="userIdSearch">用户ID</label>
+                                    <input type="number" id="userIdSearch" placeholder="输入用户ID"
+                                           class="form-control" min="1">
+                                </div>
+                                <button type="button" onclick="searchUser()" class="btn btn-primary">
+                                    🔍 搜索用户
+                                </button>
+                                <button type="button" onclick="clearSearch()" class="btn btn-outline">
+                                    🗑️ 清除
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="userProfileSection" style="display: none;">
+                            <div class="user-profile">
+                                <h4>用户信息</h4>
+                                <div class="profile-grid" id="userProfileInfo">
+                                    <!-- 用户信息将通过JavaScript动态填充 -->
+                                </div>
+
+                                <div class="role-selection">
+                                    <strong>更改角色:</strong>
+                                    <select id="roleSelect" class="form-control" style="width: auto;">
+                                        <option value="VIEWER">查看者</option>
+                                        <option value="EDITOR">编辑者</option>
+                                        <option value="ADMIN">管理员</option>
+                                    </select>
+                                    <button onclick="changeUserRole()" class="btn btn-success">
+                                        💾 保存更改
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="message" class="message"></div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script>
+    let currentSearchedUserId = null;
+
+    // 页面加载时检查权限并加载数据
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 检查管理员权限
+        if (!await checkAdminPermission()) {
+            return;
+        }
+
+        await loadUpgradeRequests();
+        setupEventListeners();
+    });
+
+    // 检查管理员权限
+    async function checkAdminPermission() {
+        try {
+            const response = await user.getProfile();
+            const userData = response.data;
+            const userRole = userData.role || '';
+
+            if (!userRole.includes('ADMIN')) {
+                showMessage('权限不足：只有管理员可以访问此页面', 'error');
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 2000);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('检查权限异常:', error);
+            showMessage('检查权限时发生错误', 'error');
+            return false;
+        }
+    }
+
+    // 设置事件监听器
+    function setupEventListeners() {
+        // 用户ID搜索回车键支持
+        document.getElementById('userIdSearch').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchUser();
+            }
+        });
+    }
+
+    // 加载升级申请列表
+async function loadUpgradeRequests() {
+    const requestsLoading = document.getElementById('requestsLoading');
+    const noRequests = document.getElementById('noRequests');
+
+    try {
+        requestsLoading.style.display = 'block';
+        noRequests.style.display = 'none';
+
+        const response = await user.getUpgradeRequests();
+        console.log('升级申请响应:', response);
+
+        if (response.success && response.data) {
+            const requestUserIds = response.data;
+            await displayUpgradeRequests(requestUserIds);
+
+            if (requestUserIds.length === 0) {
+                noRequests.style.display = 'block';
+            }
+        } else {
+            showMessage('加载升级申请失败: ' + (response.message || '未知错误'), 'error');
+            noRequests.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('加载升级申请异常:', error);
+        showMessage('加载升级申请时发生错误: ' + error.message, 'error');
+        noRequests.style.display = 'block';
+    } finally {
+        requestsLoading.style.display = 'none';
+    }
+}
+
+    // 显示升级申请列表
+    async function displayUpgradeRequests(userIds) {
+        const requestsList = document.getElementById('upgradeRequestsList');
+
+        if (userIds.length === 0) {
+            requestsList.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>暂无角色升级申请</p></div>';
+            return;
+        }
+
+        let requestsHTML = '';
+
+        for (const userId of userIds) {
+            try {
+                // 获取用户详细信息
+                const userResponse = await user.getUserProfileById(userId);
+
+                if (userResponse.success && userResponse.data) {
+                    const userData = userResponse.data;
+
+                    requestsHTML += `
+                        <div class="request-item">
+                            <div class="request-info">
+                                <strong>用户ID: ${userId}</strong>
+                                <div>用户名: ${userData.username}</div>
+                                <div>邮箱: ${userData.email}</div>
+                                <div>当前角色: ${getRoleText(userData.role)}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    requestsHTML += `
+                        <div class="request-item">
+                            <div class="request-info">
+                                <strong>用户ID: ${userId}</strong>
+                                <div>无法获取用户信息</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error(`获取用户 ${userId} 信息异常:`, error);
+
+                requestsHTML += `
+                    <div class="request-item">
+                        <div class="request-info">
+                            <strong>用户ID: ${userId}</strong>
+                            <div>获取用户信息失败</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        requestsList.innerHTML = requestsHTML;
+    }
+
+    // 搜索用户
+    async function searchUser() {
+        const userIdInput = document.getElementById('userIdSearch').value.trim();
+
+        if (!userIdInput) {
+            showMessage('请输入用户ID', 'error');
+            return;
+        }
+
+        const userId = parseInt(userIdInput);
+        if (isNaN(userId) || userId <= 0) {
+            showMessage('请输入有效的用户ID', 'error');
+            return;
+        }
+
+        await loadUserProfile(userId);
+    }
+
+    // 加载用户信息
+    async function loadUserProfile(userId) {
+        try {
+            const response = await user.getUserProfileById(userId);
+            console.log('用户信息响应:', response);
+
+            if (response.success && response.data) {
+                const userData = response.data;
+                currentSearchedUserId = userId;
+
+                displayUserProfile(userData);
+                document.getElementById('userProfileSection').style.display = 'block';
+
+                // 设置当前角色
+                document.getElementById('roleSelect').value = userData.role;
+
+            } else {
+                showMessage('获取用户信息失败: ' + (response.message || '未知错误'), 'error');
+            }
+        } catch (error) {
+            console.error('获取用户信息异常:', error);
+            showMessage('获取用户信息时发生错误: ' + error.message, 'error');
+        }
+    }
+
+    // 显示用户信息
+    function displayUserProfile(userData) {
+        const profileInfo = document.getElementById('userProfileInfo');
+
+        profileInfo.innerHTML = `
+            <div class="profile-field"><strong>用户ID:</strong> ${userData.userId}</div>
+            <div class="profile-field"><strong>用户名:</strong> ${userData.username}</div>
+            <div class="profile-field"><strong>邮箱:</strong> ${userData.email}</div>
+            <div class="profile-field"><strong>手机:</strong> ${userData.phone || '未设置'}</div>
+            <div class="profile-field"><strong>姓名:</strong> ${userData.full_name || '未设置'}</div>
+            <div class="profile-field"><strong>当前角色:</strong> ${getRoleText(userData.role)}</div>
+        `;
+    }
+
+    // 更改用户角色
+    async function changeUserRole() {
+        if (!currentSearchedUserId) {
+            showMessage('请先搜索用户', 'error');
+            return;
+        }
+
+        const newRole = document.getElementById('roleSelect').value;
+
+        try {
+            const response = await user.changeUserRole(currentSearchedUserId, newRole);
+
+            if (response.success) {
+                showMessage(`已成功将用户角色更改为 ${getRoleText(newRole)}`, 'success');
+                // 重新加载用户信息
+                await loadUserProfile(currentSearchedUserId);
+            } else {
+                showMessage('更改角色失败: ' + (response.message || '未知错误'), 'error');
+            }
+        } catch (error) {
+            console.error('更改角色异常:', error);
+            showMessage('更改角色过程中发生错误: ' + error.message, 'error');
+        }
+    }
+
+    // 清除搜索
+    function clearSearch() {
+        document.getElementById('userIdSearch').value = '';
+        document.getElementById('userProfileSection').style.display = 'none';
+        currentSearchedUserId = null;
+        showMessage('搜索已清除', 'info');
+    }
+
+    // 获取角色文本
+    function getRoleText(role) {
+        const roleMap = {
+            'VIEWER': '查看者',
+            'EDITOR': '编辑者',
+            'ADMIN': '管理员'
+        };
+        return roleMap[role] || role;
+    }
+
+    // 显示消息
+    function showMessage(text, type) {
+        const messageEl = document.getElementById('message');
+        messageEl.textContent = text;
+        messageEl.className = `message ${type}`;
+        messageEl.style.display = 'block';
+
+        setTimeout(() => {
+            messageEl.style.display = 'none';
+        }, type === 'success' ? 5000 : 3000);
+    }
+</script>
+</body>
+</html>

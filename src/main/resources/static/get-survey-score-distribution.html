@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>问卷评分分布 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/get-survey-score-distribution-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>问卷评分分布 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎，管理员</span>
+                    <button onclick="goBack()" class="btn">返回工作台</button>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="distribution-container">
+                <div class="distribution-header">
+                    <h1>问卷评分分布分析</h1>
+                    <p>查看用户对各个Likert问题（五点量表问题）的评分分布情况</p>
+                </div>
+
+                <div class="question-selector">
+                    <h3>请选择要查看的问题</h3>
+                    <div id="questionList" class="question-list">
+                        <!-- 问题列表将在这里动态生成 -->
+                    </div>
+                </div>
+
+                <div id="loading" class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>加载问题列表...</p>
+                </div>
+
+                <div id="content" style="display: none;">
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <div class="chart-title" id="chartTitle">请选择一个问题查看评分分布</div>
+                        </div>
+                        <canvas id="scoreChart"></canvas>
+                    </div>
+
+                    <div id="noData" class="no-data" style="display: none;">
+                        <h3>暂无数据</h3>
+                        <p>该问题还没有用户回答，请稍后再查看。</p>
+                    </div>
+
+                    <div id="distributionDetails" class="distribution-details" style="display: none;">
+                        <h3>详细分布数据</h3>
+                        <table class="score-table">
+                            <thead>
+                            <tr>
+                                <th>评分</th>
+                                <th>描述</th>
+                                <th>人数</th>
+                                <th>百分比</th>
+                                <th>分布图</th>
+                            </tr>
+                            </thead>
+                            <tbody id="scoreTableBody">
+                            <!-- 表格数据将在这里动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="statistics" class="statistics" style="display: none;">
+                        <!-- 统计信息将在这里动态生成 -->
+                    </div>
+
+                    <div class="action-buttons">
+                        <button onclick="refreshData()" class="btn-primary">刷新数据</button>
+                        <button onclick="goBack()" class="btn-outline">返回工作台</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/survey.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    let questions = [];
+    let selectedQuestionIndex = null;
+    let scoreChart = null;
+    let currentDistribution = null;
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 加载问卷问题
+        loadSurveyQuestions();
+    });
+
+    async function loadSurveyQuestions() {
+        try {
+            const response = await surveyAPI.getSurveyQuestions();
+
+            if (response.success) {
+                questions = response.data.questions;
+                displayQuestionList();
+            } else {
+                throw new Error(response.message);
+            }
+        } catch (error) {
+            console.error('加载问题列表错误:', error);
+            document.getElementById('loading').innerHTML =
+                `<p style="color: #dc3545;">加载问题列表失败: ${error.message}</p>
+                 <button onclick="goBack()" class="btn btn-primary">返回</button>`;
+        }
+    }
+
+    function displayQuestionList() {
+        const questionList = document.getElementById('questionList');
+        const loading = document.getElementById('loading');
+        const content = document.getElementById('content');
+
+        // 筛选出Likert问题
+        const likertQuestions = questions.filter(q => q.isLikert);
+
+        if (likertQuestions.length === 0) {
+            questionList.innerHTML = '<p>暂无Likert问题</p>';
+        } else {
+            let html = '';
+            likertQuestions.forEach((question, index) => {
+                html += `
+                    <div class="question-item" onclick="selectQuestion(${index})"
+                         id="question_${index}">
+                        <h4>${question.content}</h4>
+                        <div class="question-meta">
+                            <span>问题 ${index + 1}</span>
+                            <span>五点量表</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            questionList.innerHTML = html;
+        }
+
+        loading.style.display = 'none';
+        content.style.display = 'block';
+    }
+
+    function selectQuestion(questionIndex) {
+        // 更新选中状态
+        document.querySelectorAll('.question-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+        document.getElementById(`question_${questionIndex}`).classList.add('selected');
+
+        selectedQuestionIndex = questionIndex;
+
+        // 加载评分分布数据
+        loadScoreDistribution(questionIndex);
+    }
+
+    async function loadScoreDistribution(questionIndex) {
+        try {
+            // 显示加载状态
+            document.getElementById('chartTitle').textContent = '加载中...';
+            document.getElementById('distributionDetails').style.display = 'none';
+            document.getElementById('statistics').style.display = 'none';
+            document.getElementById('noData').style.display = 'none';
+
+            const response = await surveyAPI.getScoreDistribution(questionIndex);
+
+            if (response.success) {
+                currentDistribution = response.data.distribution;
+                displayDistributionData(response.data);
+            } else {
+                throw new Error(response.message);
+            }
+        } catch (error) {
+            console.error('加载评分分布错误:', error);
+            alert('加载评分分布失败: ' + error.message);
+        }
+    }
+
+    function displayDistributionData(data) {
+        const question = questions[selectedQuestionIndex];
+        const distribution = data.distribution;
+        const totalResponses = data.totalResponses || 0;
+
+        // 更新图表标题
+        document.getElementById('chartTitle').textContent =
+            `问题 ${selectedQuestionIndex + 1}: ${question.content}`;
+
+        if (totalResponses === 0) {
+            // 没有数据
+            document.getElementById('noData').style.display = 'block';
+            document.getElementById('distributionDetails').style.display = 'none';
+            document.getElementById('statistics').style.display = 'none';
+            return;
+        }
+
+        // 显示详细数据
+        displayDistributionDetails(distribution, totalResponses);
+
+        // 显示统计信息
+        displayStatistics(distribution, totalResponses);
+
+        // 绘制图表
+        drawChart(distribution);
+
+        // 显示相关区域
+        document.getElementById('noData').style.display = 'none';
+        document.getElementById('distributionDetails').style.display = 'block';
+        document.getElementById('statistics').style.display = 'block';
+    }
+
+    function displayDistributionDetails(distribution, total) {
+        const tableBody = document.getElementById('scoreTableBody');
+        const descriptions = {
+            1: '非常不满意',
+            2: '不太满意',
+            3: '一般',
+            4: '比较满意',
+            5: '非常满意'
+        };
+
+        let html = '';
+        let maxCount = Math.max(...Object.values(distribution));
+
+        // 计算平均分
+        let sum = 0;
+        let weightedSum = 0;
+
+        for (let score = 1; score <= 5; score++) {
+            const count = distribution[score] || 0;
+            const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+            const progressWidth = maxCount > 0 ? (count / maxCount * 100) : 0;
+
+            sum += count;
+            weightedSum += score * count;
+
+            html += `
+                <tr>
+                    <td><strong>${score}</strong></td>
+                    <td>${descriptions[score]}</td>
+                    <td>${count} 人</td>
+                    <td>${percentage}%</td>
+                    <td>
+                        <div class="score-progress">
+                            <div class="score-progress-bar" style="width: ${progressWidth}%"></div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        tableBody.innerHTML = html;
+    }
+
+    function displayStatistics(distribution, total) {
+        const statistics = document.getElementById('statistics');
+
+        // 计算平均分
+        let weightedSum = 0;
+        for (let score = 1; score <= 5; score++) {
+            weightedSum += score * (distribution[score] || 0);
+        }
+        const averageScore = total > 0 ? (weightedSum / total).toFixed(2) : '0.00';
+
+        // 计算众数（出现次数最多的评分）
+        let mode = 0;
+        let maxCount = 0;
+        for (let score = 1; score <= 5; score++) {
+            const count = distribution[score] || 0;
+            if (count > maxCount) {
+                maxCount = count;
+                mode = score;
+            }
+        }
+
+        // 计算满意度比例（4分和5分的比例）
+        const satisfiedCount = (distribution[4] || 0) + (distribution[5] || 0);
+        const satisfactionRate = total > 0 ? ((satisfiedCount / total) * 100).toFixed(1) : '0.0';
+
+        // 计算不满意比例（1分和2分的比例）
+        const unsatisfiedCount = (distribution[1] || 0) + (distribution[2] || 0);
+        const unsatisfactionRate = total > 0 ? ((unsatisfiedCount / total) * 100).toFixed(1) : '0.0';
+
+        const modeDescription = {
+            1: '非常不满意',
+            2: '不太满意',
+            3: '一般',
+            4: '比较满意',
+            5: '非常满意'
+        };
+
+        html = `
+            <div class="stat-item">
+                <div class="stat-value">${total}</div>
+                <div class="stat-label">总回答人数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${averageScore}</div>
+                <div class="stat-label">平均分</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${mode}</div>
+                <div class="stat-label">众数（${modeDescription[mode] || '无'}）</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${satisfactionRate}%</div>
+                <div class="stat-label">满意度（4-5分）</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${unsatisfactionRate}%</div>
+                <div class="stat-label">不满意度（1-2分）</div>
+            </div>
+        `;
+
+        statistics.innerHTML = html;
+    }
+
+    function drawChart(distribution) {
+        const ctx = document.getElementById('scoreChart').getContext('2d');
+
+        // 销毁现有图表
+        if (scoreChart) {
+            scoreChart.destroy();
+        }
+
+        const labels = ['1分', '2分', '3分', '4分', '5分'];
+        const dataValues = [distribution[1] || 0, distribution[2] || 0,
+                          distribution[3] || 0, distribution[4] || 0, distribution[5] || 0];
+
+        // 计算百分比
+        const total = dataValues.reduce((a, b) => a + b, 0);
+        const percentages = dataValues.map(value =>
+            total > 0 ? ((value / total) * 100).toFixed(1) : 0
+        );
+
+        // 设置不同评分的颜色
+        const backgroundColors = [
+            'rgba(220, 53, 69, 0.7)',   // 1分 - 红色
+            'rgba(255, 193, 7, 0.7)',   // 2分 - 黄色
+            'rgba(108, 117, 125, 0.7)', // 3分 - 灰色
+            'rgba(40, 167, 69, 0.7)',   // 4分 - 绿色
+            'rgba(0, 123, 255, 0.7)'    // 5分 - 蓝色
+        ];
+
+        const borderColors = [
+            'rgb(220, 53, 69)',
+            'rgb(255, 193, 7)',
+            'rgb(108, 117, 125)',
+            'rgb(40, 167, 69)',
+            'rgb(0, 123, 255)'
+        ];
+
+        scoreChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '人数',
+                    data: dataValues,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '人数'
+                        },
+                        ticks: {
+                            stepSize: 1
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: '评分'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.raw;
+                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                return `人数: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function refreshData() {
+        if (selectedQuestionIndex !== null) {
+            loadScoreDistribution(selectedQuestionIndex);
+        } else {
+            alert('请先选择一个问题');
+        }
+    }
+
+    function goBack() {
+        window.location.href = 'dashboard.html';
+    }
+</script>
+</body>
+</html>

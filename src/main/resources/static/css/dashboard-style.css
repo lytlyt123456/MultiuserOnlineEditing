@@ -1,0 +1,336 @@
+        /* Dashboard 特定样式 */
+        .dashboard-toolbar {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .dashboard-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .dashboard-btn:hover {
+            background: #e9ecef;
+        }
+
+        /* Dashboard 任务面板样式 */
+        .dashboard-task-panel {
+            position: fixed;
+            top: 0;
+            right: -500px;
+            width: 500px;
+            height: 100vh;
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1001;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dashboard-task-panel.active {
+            right: 0;
+        }
+
+        .task-panel-header {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .task-filter {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .filter-btn {
+            padding: 0.3rem 0.8rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .filter-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .task-panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .task-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 0.5rem;
+        }
+
+        .stat-item.overdue {
+            background: #f8d7da;
+            border-radius: 4px;
+        }
+
+        .stat-number {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-item.overdue .stat-number {
+            color: #dc3545;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: #666;
+        }
+
+        .dashboard-task-item {
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .dashboard-task-item.overdue {
+            border-left: 3px solid #dc3545;
+            background: #f8d7da;
+        }
+
+        .dashboard-task-item:hover {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .task-main-info {
+            margin-bottom: 0.5rem;
+        }
+
+        .task-title {
+            font-weight: bold;
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .task-document {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .task-meta-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .task-status-priority {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .task-due-date {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .task-due-date.overdue {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .task-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+         /* 通知面板样式 */
+        .notification-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100vh;
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1001;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .notification-panel.active {
+            right: 0;
+        }
+
+        .notification-header {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notification-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .notification-item {
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .notification-item.unread {
+            background: #e7f3ff;
+            border-left: 3px solid #007bff;
+        }
+
+        .notification-content {
+            margin-bottom: 0.5rem;
+        }
+
+        .notification-title {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        .notification-message {
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .notification-time {
+            font-size: 0.7rem;
+            color: #666;
+        }
+
+        .notification-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            background: #dc3545;
+            color: white;
+            border-radius: 10px;
+            padding: 0.1rem 0.4rem;
+            font-size: 0.7rem;
+            margin-left: 0.25rem;
+        }
+
+        /* 问卷样式 */
+        .survey-section {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+
+        .survey-section h4 {
+            margin-top: 0;
+            color: #007bff;
+        }
+
+        .survey-message {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .survey-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-survey {
+            background: #007bff;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.9rem;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-survey:hover {
+            background: #0056b3;
+        }
+
+        .btn-survey-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-survey-secondary:hover {
+            background: #545b62;
+        }
+
+        .survey-status {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+        }
+
+        .status-eligible {
+            background: #28a745;
+            color: white;
+        }
+
+        .status-not-eligible {
+            background: #dc3545;
+            color: white;
+        }
+
+        .status-completed {
+            background: #17a2b8;
+            color: white;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .dashboard-task-panel,
+            .notification-panel {
+                width: 100%;
+                right: -100%;
+            }
+
+            .task-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }

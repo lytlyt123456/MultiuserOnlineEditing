@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>回收站 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/recycle-bin-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>回收站 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="my-documents.html" class="btn">返回文档列表</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="recycle-bin-container">
+
+                <h3>已删除的文档</h3>
+
+                <!-- 文档列表 -->
+                <div id="documentsList">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 加载回收站文档
+        loadRecycleBinDocuments();
+    });
+
+    // 加载回收站文档
+    async function loadRecycleBinDocuments() {
+        const documentsList = document.getElementById('documentsList');
+        documentsList.innerHTML = '<div class="loading">加载中...</div>';
+
+        try {
+            const response = await documentAPI.getRecycleBinDocuments();
+
+            if (response.success) {
+                displayDocuments(response.data.documents || []);
+            } else {
+                documentsList.innerHTML = '<div class="empty-state">加载失败: ' + response.message + '</div>';
+            }
+        } catch (error) {
+            console.error('加载回收站文档错误:', error);
+            documentsList.innerHTML = '<div class="empty-state">加载失败: ' + error.message + '</div>';
+        }
+    }
+
+    // 显示文档列表
+    function displayDocuments(documents) {
+        const documentsList = document.getElementById('documentsList');
+
+        if (documents.length === 0) {
+            documentsList.innerHTML = '<div class="empty-state">回收站为空</div>';
+            return;
+        }
+
+        let html = '<div class="documents-list">';
+
+        documents.forEach(doc => {
+            const contentPreview = doc.content ?
+                (doc.content.replace(/<[^>]*>/g, '').substring(0, 200) + '...') :
+                '无内容';
+
+            html += `
+                <div class="document-item">
+                    <div class="document-header">
+                        <h4 class="document-title">${escapeHtml(doc.title)}</h4>
+                        <span class="document-type">${doc.type === 'MARKDOWN' ? 'Markdown' : '富文本'}</span>
+                    </div>
+
+                    <div class="document-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">删除时间</span>
+                            <span class="meta-value">${new Date(doc.updatedAt).toLocaleString()}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">创建时间</span>
+                            <span class="meta-value">${new Date(doc.createdAt).toLocaleString()}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">版本</span>
+                            <span class="meta-value">${doc.version}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">所属文件夹</span>
+                            <span class="meta-value">${doc.folder}</span>
+                        </div>
+                    </div>
+
+                    ${doc.tags && doc.tags.length > 0 ? `
+                        <div class="tags-container">
+                            ${doc.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                        </div>
+                    ` : ''}
+
+                    <div class="document-content">
+                        ${escapeHtml(contentPreview)}
+                    </div>
+
+                    <div class="document-actions">
+                        <button class="btn-restore" onclick="restoreDocument(${doc.id}, '${doc.title}')">恢复</button>
+                        <button class="btn-delete-forever" onclick="deleteDocumentForever(${doc.id}, '${doc.title}')">永久删除</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        documentsList.innerHTML = html;
+    }
+
+    // 恢复文档
+    async function restoreDocument(documentId, documentTitle) {
+        if (!confirm(`确定要恢复文档 "${documentTitle}" 吗？`)) {
+            return;
+        }
+
+        try {
+            const response = await documentAPI.restoreDocument(documentId);
+
+            if (response.success) {
+                alert('文档恢复成功！');
+                // 重新加载回收站文档列表
+                loadRecycleBinDocuments();
+            } else {
+                alert('恢复失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('恢复文档错误:', error);
+            alert('恢复失败: ' + error.message);
+        }
+    }
+
+    // 永久删除文档
+    async function deleteDocumentForever(documentId, documentTitle) {
+        if (!confirm(`确定要永久删除文档 "${documentTitle}" 吗？此操作不可撤销！`)) {
+            return;
+        }
+
+        try {
+            const response = await documentAPI.deleteDocumentForever(documentId);
+
+            if (response.success) {
+                alert('文档已永久删除！');
+                // 重新加载回收站文档列表
+                loadRecycleBinDocuments();
+            } else {
+                alert('删除失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('永久删除文档错误:', error);
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    // HTML转义函数
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+</body>
+</html>

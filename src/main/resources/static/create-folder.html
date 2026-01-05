@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新建文件夹 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/create-folder-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>新建文件夹 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="my-documents.html" class="btn">返回文档列表</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="form-container">
+                <!-- 父文件夹信息 -->
+                <div id="parentFolderInfo" class="current-folder" style="display: none;">
+                    <strong>父文件夹:</strong> <span id="parentFolderName"></span>
+                </div>
+
+                <form id="createFolderForm" onsubmit="return false;">
+                    <div class="form-group">
+                        <label for="name">文件夹名称 *</label>
+                        <input type="text" id="name" placeholder="请输入文件夹名称" required maxlength="100">
+                        <div class="form-help">文件夹名称不能超过100个字符</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">文件夹描述</label>
+                        <textarea id="description" placeholder="请输入文件夹描述（可选）" maxlength="500"></textarea>
+                        <div class="form-help">文件夹描述不能超过500个字符</div>
+                    </div>
+
+                    <!-- 隐藏的父文件夹ID字段 -->
+                    <input type="hidden" id="parentId">
+
+                    <div class="action-buttons">
+                        <button type="button" onclick="createFolder()" class="btn btn-primary">创建文件夹</button>
+                        <button type="button" onclick="goBack()" class="btn btn-outline">取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let parentFolderId = null;
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 获取URL参数中的父文件夹ID
+        const urlParams = new URLSearchParams(window.location.search);
+        parentFolderId = urlParams.get('parentId');
+
+        // 设置隐藏字段
+        document.getElementById('parentId').value = parentFolderId || '';
+
+        // 如果有父文件夹ID，显示父文件夹信息
+        if (parentFolderId) {
+            loadParentFolderInfo(parentFolderId);
+        } else {
+            // 如果没有父文件夹ID，说明是在根目录创建
+            document.getElementById('parentFolderInfo').innerHTML = '<strong>位置:</strong> 根目录';
+            document.getElementById('parentFolderInfo').style.display = 'block';
+        }
+    });
+
+    // 加载父文件夹信息
+    async function loadParentFolderInfo(folderId) {
+        try {
+            const response = await folderAPI.getFolderDetail(folderId);
+            if (response.success) {
+                const parentFolderInfo = document.getElementById('parentFolderInfo');
+                const parentFolderName = document.getElementById('parentFolderName');
+
+                parentFolderName.textContent = response.data.name;
+                parentFolderInfo.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('加载父文件夹信息失败:', error);
+            // 即使加载失败也显示位置信息
+            document.getElementById('parentFolderInfo').innerHTML = '<strong>位置:</strong> 指定文件夹';
+            document.getElementById('parentFolderInfo').style.display = 'block';
+        }
+    }
+
+    // 创建文件夹
+    async function createFolder() {
+        const name = document.getElementById('name').value.trim();
+        const description = document.getElementById('description').value.trim();
+        const parentId = document.getElementById('parentId').value;
+
+        if (!name) {
+            alert('请输入文件夹名称');
+            return;
+        }
+
+        try {
+            const folderData = {
+                name: name,
+                description: description || '',
+                parentId: parentId ? parseInt(parentId) : null
+            };
+
+            const response = await folderAPI.createFolder(folderData);
+
+            if (response.success) {
+                alert('文件夹创建成功！');
+                // 返回到文档列表页面
+                window.location.href = 'my-documents.html';
+            } else {
+                alert('创建失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('创建文件夹错误:', error);
+            alert('创建失败: ' + error.message);
+        }
+    }
+
+    // 返回上一页
+    function goBack() {
+        window.history.back();
+    }
+</script>
+</body>
+</html>

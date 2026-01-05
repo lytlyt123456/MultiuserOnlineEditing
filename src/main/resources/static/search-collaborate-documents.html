@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搜索协作文档 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/search-collaborate-documents-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>搜索协作文档 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="dashboard.html" class="btn">返回工作台</a>
+                    <a href="my-documents.html" class="btn">我的文档</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <!-- 搜索表单 -->
+            <div class="search-form">
+                <h3>搜索条件</h3>
+                <form id="searchForm" onsubmit="return false;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="title">标题</label>
+                            <input type="text" id="title" placeholder="输入文档标题关键词">
+                        </div>
+                        <div class="form-group">
+                            <label for="content">内容</label>
+                            <input type="text" id="content" placeholder="输入文档内容关键词">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ownerUsername">所有者用户名</label>
+                            <input type="text" id="ownerUsername" placeholder="输入文档所有者用户名">
+                        </div>
+                        <div class="form-group">
+                            <label for="tagName">标签名称</label>
+                            <input type="text" id="tagName" placeholder="输入标签名称">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="startDate">开始日期</label>
+                            <input type="datetime-local" id="startDate">
+                        </div>
+                        <div class="form-group">
+                            <label for="endDate">结束日期</label>
+                            <input type="datetime-local" id="endDate">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <button type="button" onclick="searchDocuments()" class="btn btn-primary">搜索</button>
+                        <button type="button" onclick="resetForm()" class="btn btn-outline">重置</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 搜索结果 -->
+            <div class="search-results">
+                <h3>搜索结果</h3>
+                <div id="searchResults">
+                    <div class="empty-state">请输入搜索条件并点击搜索</div>
+                </div>
+
+                <!-- 分页控件 -->
+                <div class="pagination" id="pagination" style="display: none;">
+                    <button id="prevPage" onclick="changePage(-1)">上一页</button>
+                    <span class="pagination-info" id="pageInfo">第 0 页，共 0 页</span>
+                    <button id="nextPage" onclick="changePage(1)">下一页</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let currentPage = 0;
+    let totalPages = 0;
+    let currentSearchParams = {};
+
+    // 页面加载时检查登录状态
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+    });
+
+    // 搜索文档
+    async function searchDocuments(page = 0) {
+        const searchParams = getSearchParams();
+        currentSearchParams = searchParams;
+        currentPage = page;
+
+        const resultsDiv = document.getElementById('searchResults');
+        resultsDiv.innerHTML = '<div class="loading">搜索中...</div>';
+
+        try {
+            const response = await documentAPI.advancedSearchCollaborator({
+                ...searchParams,
+                page: page,
+                size: 10
+            });
+
+            if (response.success) {
+                displayResults(response.data);
+                updatePagination(response.data);
+            } else {
+                resultsDiv.innerHTML = '<div class="empty-state">搜索失败: ' + response.message + '</div>';
+            }
+        } catch (error) {
+            console.error('搜索错误:', error);
+            resultsDiv.innerHTML = '<div class="empty-state">搜索错误: ' + error.message + '</div>';
+        }
+    }
+
+    // 获取搜索参数
+    function getSearchParams() {
+        const params = {};
+
+        const title = document.getElementById('title').value.trim();
+        const content = document.getElementById('content').value.trim();
+        const ownerUsername = document.getElementById('ownerUsername').value.trim();
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const tagName = document.getElementById('tagName').value.trim();
+
+        if (title) params.title = title;
+        if (content) params.content = content;
+        if (ownerUsername) params.ownerUsername = ownerUsername;
+        if (startDate) params.startDate = startDate;
+        if (endDate) params.endDate = endDate;
+        if (tagName) params.tagName = tagName;
+
+        return params;
+    }
+
+    // 显示搜索结果
+    function displayResults(data) {
+        const resultsDiv = document.getElementById('searchResults');
+        const documents = data.documents || [];
+
+        if (documents.length === 0) {
+            resultsDiv.innerHTML = '<div class="empty-state">未找到匹配的协作文档</div>';
+            return;
+        }
+
+        let html = '';
+        documents.forEach(doc => {
+            const contentPreview = doc.content ?
+                (doc.content.length > 200 ? doc.content.substring(0, 200) + '...' : doc.content) :
+                '无内容';
+
+            html += `
+                <div class="result-item" onclick="openDocument(${doc.id})">
+                    <div class="owner-info">
+                        <strong>所有者:</strong> ${doc.owner}
+                    </div>
+                    <div class="collaborators-info">
+                        <strong>协作者:</strong> ${doc.collaborators && doc.collaborators.length > 0 ?
+                            '您和其他 ' + (doc.collaborators.length - 1) + ' 人' : '您'}
+                    </div>
+                    <div class="result-header">
+                        <h4 class="result-title">${escapeHtml(doc.title)}</h4>
+                        <span class="result-type">${doc.type === 'MARKDOWN' ? 'Markdown' : '富文本'}</span>
+                    </div>
+                    <div class="result-meta">
+                        <span>更新: ${new Date(doc.updatedAt).toLocaleString()}</span>
+                        <span>版本: ${doc.version}</span>
+                        <span>状态: ${getStatusText(doc.status)}</span>
+                    </div>
+                    <div class="result-content">${escapeHtml(contentPreview)}</div>
+                    ${doc.tags && doc.tags.length > 0 ? `
+                        <div class="result-tags">
+                            ${doc.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+
+        resultsDiv.innerHTML = html;
+    }
+
+    // 更新分页控件
+    function updatePagination(data) {
+        const paginationDiv = document.getElementById('pagination');
+        const pageInfo = document.getElementById('pageInfo');
+        const prevBtn = document.getElementById('prevPage');
+        const nextBtn = document.getElementById('nextPage');
+
+        totalPages = data.totalPages || 0;
+
+        if (totalPages > 1) {
+            paginationDiv.style.display = 'flex';
+            pageInfo.textContent = `第 ${currentPage + 1} 页，共 ${totalPages} 页`;
+            prevBtn.disabled = currentPage === 0;
+            nextBtn.disabled = currentPage === totalPages - 1;
+        } else {
+            paginationDiv.style.display = 'none';
+        }
+    }
+
+    // 切换页面
+    function changePage(direction) {
+        const newPage = currentPage + direction;
+        if (newPage >= 0 && newPage < totalPages) {
+            searchDocuments(newPage);
+        }
+    }
+
+    // 重置表单
+    function resetForm() {
+        document.getElementById('searchForm').reset();
+        document.getElementById('searchResults').innerHTML = '<div class="empty-state">请输入搜索条件并点击搜索</div>';
+        document.getElementById('pagination').style.display = 'none';
+        currentPage = 0;
+        totalPages = 0;
+        currentSearchParams = {};
+    }
+
+    // 打开文档
+    function openDocument(documentId) {
+        window.location.href = `edit-document.html?id=${documentId}`;
+    }
+
+    // 获取状态文本
+    function getStatusText(status) {
+        const statusMap = {
+            'DRAFT': '草稿',
+            'PUBLISHED': '已发布',
+            'ARCHIVED': '已归档',
+            'DELETED': '已删除'
+        };
+        return statusMap[status] || status;
+    }
+
+    // HTML转义函数
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+</body>
+</html>

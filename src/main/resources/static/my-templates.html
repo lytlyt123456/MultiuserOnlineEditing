@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模板管理 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/my-templates-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>模板管理 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="dashboard.html" class="btn">返回工作台</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <!-- 操作按钮 -->
+            <div class="action-buttons">
+                <a href="create-template.html" class="btn btn-primary">新建模板</a>
+            </div>
+
+            <!-- 筛选区域 -->
+            <div class="filter-section">
+                <form id="filterForm" onsubmit="return false;">
+                    <div class="filter-form">
+                        <div class="form-group">
+                            <label for="templateType">模板类型</label>
+                            <select id="templateType" onchange="onTemplateTypeChange()">
+                                <option value="available">我的模板 + 公开模板</option>
+                                <option value="user">仅我的模板</option>
+                                <option value="public">公开模板（按分类）</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group category-selector" id="categorySelector">
+                            <label for="category">模板分类</label>
+                            <select id="category">
+                                <option value="BUSINESS">商务</option>
+                                <option value="TECHNICAL">技术</option>
+                                <option value="ACADEMIC">学术</option>
+                                <option value="PERSONAL">个人</option>
+                                <option value="MEETING">会议</option>
+                                <option value="REPORT">报告</option>
+                                <option value="PROPOSAL">提案</option>
+                                <option value="OTHER">其他</option>
+                            </select>
+                        </div>
+
+                        <div style="text-align: right;">
+                            <button type="button" onclick="loadTemplates()" class="btn btn-primary">筛选</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 模板列表 -->
+            <div id="templatesList">
+                <div class="loading">...</div>
+            </div>
+
+            <!-- 分页控件（仅用于分页查询） -->
+            <div class="pagination" id="pagination" style="display: none;">
+                <button id="prevPage" onclick="changePage(-1)">上一页</button>
+                <span class="pagination-info" id="pageInfo">第 0 页，共 0 页</span>
+                <button id="nextPage" onclick="changePage(1)">下一页</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let currentPage = 0;
+    let totalPages = 0;
+    let currentTemplateType = 'available';
+    let currentUserId = null;
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 获取当前用户ID
+        await getCurrentUserId();
+    });
+
+    // 获取当前用户ID
+    async function getCurrentUserId() {
+        try {
+            const response = await user.getProfile();
+            if (response.success && response.data) {
+                currentUserId = response.data.userId;
+                console.log('当前用户ID:', currentUserId);
+            } else {
+                console.error('获取用户信息失败:', response.message);
+            }
+        } catch (error) {
+            console.error('获取用户ID错误:', error);
+        }
+    }
+
+    // 模板类型变更处理
+    function onTemplateTypeChange() {
+        const templateType = document.getElementById('templateType').value;
+        const categorySelector = document.getElementById('categorySelector');
+
+        if (templateType === 'public') {
+            categorySelector.style.display = 'block';
+        } else {
+            categorySelector.style.display = 'none';
+        }
+    }
+
+    // 加载模板
+    async function loadTemplates(page = 0) {
+        const templatesList = document.getElementById('templatesList');
+        templatesList.innerHTML = '<div class="loading">加载中...</div>';
+
+        const templateType = document.getElementById('templateType').value;
+        currentTemplateType = templateType;
+        currentPage = page;
+
+        try {
+            let response;
+
+            if (templateType === 'available') {
+                // 我的模板 + 公开模板（分页）
+                response = await templateAPI.getAvailableTemplates(page, 12);
+                showPagination(response.data);
+            } else if (templateType === 'user') {
+                // 仅我的模板（不分页）
+                response = await templateAPI.getUserTemplates();
+                hidePagination();
+            } else if (templateType === 'public') {
+                // 公开模板按分类（不分页）
+                const category = document.getElementById('category').value;
+                response = await templateAPI.getPublicTemplatesByCategory(category);
+                hidePagination();
+            }
+
+            if (response.success) {
+                const templates = response.data.templates || [];
+                displayTemplates(templates);
+            } else {
+                templatesList.innerHTML = '<div class="empty-state">加载失败: ' + response.message + '</div>';
+            }
+        } catch (error) {
+            console.error('加载模板错误:', error);
+            templatesList.innerHTML = '<div class="empty-state">加载失败: ' + error.message + '</div>';
+        }
+    }
+
+    // 显示模板列表
+    function displayTemplates(templates) {
+        const templatesList = document.getElementById('templatesList');
+
+        if (templates.length === 0) {
+            templatesList.innerHTML = '<div class="empty-state">未找到模板</div>';
+            return;
+        }
+
+        let html = '<div class="templates-grid">';
+
+        templates.forEach(template => {
+            const categoryText = getCategoryText(template.category);
+            const isPublic = template.is_public;
+            const isOwner = template.owner_id === currentUserId;
+
+            html += `
+                <div class="template-card">
+                    <div class="template-header">
+                        <h3 class="template-name">${escapeHtml(template.name)}</h3>
+                        <span class="template-category">${categoryText}</span>
+                    </div>
+                    <div class="template-description">${template.description ? escapeHtml(template.description) : '<em>暂无描述</em>'}</div>
+                    <div class="template-meta">
+                        <span>更新: ${new Date(template.updated_at).toLocaleDateString()}</span>
+                        <span>类型: ${template.document_type}</span>
+                        <span class="template-visibility ${isPublic ? 'visibility-public' : 'visibility-private'}">
+                            ${isPublic ? '公开' : '私有'}
+                        </span>
+                    </div>
+                    <div class="template-actions">
+                        ${isOwner ? `
+                            <button class="btn-edit" onclick="editTemplate(${template.id})">编辑</button>
+                            <button class="btn-edit" onclick="viewTemplate(${template.id})">查看</button>
+                            <button class="btn-toggle" onclick="toggleTemplateVisibility(${template.id})">${isPublic ? '设为私有' : '设为公开'}</button>
+                            <button class="btn-delete" onclick="deleteTemplate(${template.id}, '${template.name}')">删除</button>
+                        ` : `
+                            <button class="btn-edit" onclick="viewTemplate(${template.id})">查看</button>
+                        `}
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        templatesList.innerHTML = html;
+    }
+
+    // 切换模板可见性
+    async function toggleTemplateVisibility(templateId) {
+        try {
+            const response = await templateAPI.toggleTemplateVisibility(templateId);
+            if (response.success) {
+                alert('模板可见性切换成功');
+                loadTemplates(currentPage);
+            } else {
+                alert('操作失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('切换模板可见性错误:', error);
+            alert('操作失败: ' + error.message);
+        }
+    }
+
+    // 编辑模板
+    function editTemplate(templateId) {
+        window.location.href = `edit-template.html?id=${templateId}`;
+    }
+
+    // 查看模板（非所有者）
+    function viewTemplate(templateId) {
+        window.location.href = `view-template.html?id=${templateId}`;
+    }
+
+    // 删除模板
+    async function deleteTemplate(templateId, templateName) {
+        if (!confirm(`确定要删除模板 "${templateName}" 吗？此操作不可撤销。`)) {
+            return;
+        }
+
+        try {
+            const response = await templateAPI.deleteTemplate(templateId);
+            if (response.success) {
+                alert('模板删除成功');
+                loadTemplates(currentPage);
+            } else {
+                alert('删除失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('删除模板错误:', error);
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    // 显示分页
+    function showPagination(data) {
+        const paginationDiv = document.getElementById('pagination');
+        const pageInfo = document.getElementById('pageInfo');
+        const prevBtn = document.getElementById('prevPage');
+        const nextBtn = document.getElementById('nextPage');
+
+        totalPages = data.totalPages || 0;
+
+        if (totalPages > 1) {
+            paginationDiv.style.display = 'flex';
+            pageInfo.textContent = `第 ${currentPage + 1} 页，共 ${totalPages} 页`;
+            prevBtn.disabled = currentPage === 0;
+            nextBtn.disabled = currentPage === totalPages - 1;
+        } else {
+            paginationDiv.style.display = 'none';
+        }
+    }
+
+    // 隐藏分页
+    function hidePagination() {
+        document.getElementById('pagination').style.display = 'none';
+    }
+
+    // 切换页面
+    function changePage(direction) {
+        const newPage = currentPage + direction;
+        if (newPage >= 0 && newPage < totalPages) {
+            loadTemplates(newPage);
+        }
+    }
+
+    // 获取分类文本
+    function getCategoryText(category) {
+        const categoryMap = {
+            'BUSINESS': '商务',
+            'TECHNICAL': '技术',
+            'ACADEMIC': '学术',
+            'PERSONAL': '个人',
+            'MEETING': '会议',
+            'REPORT': '报告',
+            'PROPOSAL': '提案',
+            'OTHER': '其他'
+        };
+        return categoryMap[category] || category;
+    }
+
+    // HTML转义函数
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+</body>
+</html>

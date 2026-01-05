@@ -1,0 +1,71 @@
+        .breadcrumb {
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .breadcrumb a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        .file-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .file-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        .file-item:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.1);
+            transform: translateY(-2px);
+        }
+        .file-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+        .folder-icon {
+            color: #ffc107;
+        }
+        .document-icon {
+            color: #007bff;
+        }
+        .file-name {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            word-break: break-word;
+        }
+        .file-info {
+            font-size: 0.8rem;
+            color: #666;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+        .action-buttons {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+        .current-folder-info {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }

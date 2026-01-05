@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑文档 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/edit-document-style.css">
+    <!-- 引入Quill富文本编辑器 -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <!-- 引入Markdown编辑器样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>编辑文档 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+
+                    <!-- 新增：协作工具栏 -->
+                    <div class="collaboration-toolbar">
+                        <div class="online-users" id="onlineUsers">
+                            <!-- 在线用户将在这里动态显示 -->
+                        </div>
+
+                        <!-- 新增：视频会议 -->
+                        <button class="collaboration-btn" onclick="toggleVideoConferencePanel()" id="videoConferenceBtn">
+                            📹 视频会议
+                        </button>
+
+                        <button class="collaboration-btn" onclick="toggleCommentSidebar()" id="commentBtn">
+                            💬 评论
+                        </button>
+                        <button class="collaboration-btn" onclick="toggleTaskSidebar()" id="taskBtn">
+                            📋 任务
+                        </button>
+                        <button class="collaboration-btn" onclick="toggleNotificationPanel()" id="notificationBtn">
+                            🔔 通知 <span id="unreadCountBadge" class="badge" style="display: none;">0</span>
+                        </button>
+                    </div>
+
+                    <button onclick="goBack()" class="btn">返回文档列表</button>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="editor-container">
+                <!-- 文档基本信息 -->
+                <div class="document-info" id="documentInfo">
+                    <div class="document-info-item">
+                        <strong>创建时间:</strong> <span id="createdAt">加载中...</span>
+                    </div>
+                    <div class="document-info-item">
+                        <strong>最后更新:</strong> <span id="updatedAt">加载中...</span>
+                    </div>
+                    <div class="document-info-item">
+                        <strong>文档状态:</strong> <span id="documentStatus">加载中...</span>
+                    </div>
+                    <div class="document-info-item">
+                        <strong>当前版本:</strong> <span id="documentVersion">加载中...</span>
+                    </div>
+                    <div class="document-info-item">
+                        <strong>文档所有者:</strong> <span id="documentOwner">加载中...</span>
+                    </div>
+                </div>
+
+                <form id="editDocumentForm" onsubmit="return false;">
+                    <div class="form-group">
+                        <label for="title">文档标题 *</label>
+                        <input type="text" id="title" placeholder="请输入文档标题" required maxlength="200">
+                        <div class="form-help">文档标题不能超过200个字符</div>
+                        <div class="character-count">
+                            <span id="titleCount">0</span>/200
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="editor-header">
+                            <label>文档内容 *</label>
+                            <span class="editor-type-badge" id="editorTypeBadge">加载中...</span>
+                        </div>
+
+                        <div class="editor-content">
+                            <!-- 富文本编辑器 -->
+                            <div class="editor-panel" id="richTextPanel">
+                                <div id="richTextEditor"></div>
+                            </div>
+
+                            <!-- Markdown编辑器 -->
+                            <div class="editor-panel" id="markdownPanel">
+                                <div class="split-layout">
+                                    <div>
+                                        <label style="font-size: 0.9rem; color: #666;">编辑区</label>
+                                        <textarea id="markdownEditor" placeholder="请输入Markdown内容..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.9rem; color: #666;">预览区</label>
+                                        <div id="markdownPreview" class="markdown-preview"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 隐藏的文档ID字段 -->
+                    <input type="hidden" id="documentId">
+
+                    <div class="action-buttons">
+                        <button type="button" onclick="saveDocument()" class="btn btn-primary">保存修改</button>
+                        <button type="button" onclick="goBack()" class="btn btn-outline">取消</button>
+
+                        <!-- 导出文档 -->
+                        <button type="button" onclick="showExportOptions()" class="btn btn-secondary">导出文档</button>
+                    </div>
+                </form>
+
+                <!-- 协作者管理 -->
+                <div class="collaborators-section" id="collaboratorsSection" style="display: none;">
+                    <h3>协作者管理</h3>
+                    <div class="collaborators-list" id="collaboratorsList">
+                        <!-- 协作者列表将在这里动态生成 -->
+                    </div>
+                    <div class="add-collaborator-form">
+                        <input type="text" id="collaboratorUsername" placeholder="输入用户名添加协作者">
+                        <button type="button" onclick="addCollaborator()" class="btn btn-primary">添加协作者</button>
+                    </div>
+                </div>
+
+                <div id="exportModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>导出文档</h3>
+                            <span class="close" onclick="closeExportModal()">&times;</span>
+                        </div>
+                        <div class="modal-body">
+                            <div id="exportOptions">
+                                <!-- 导出选项将根据文档类型动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 危险操作区域 -->
+                <div class="danger-zone">
+                    <h3>危险操作</h3>
+                    <p>删除文档将把文档移到回收站。此操作不可撤销。</p>
+                    <button type="button" onclick="deleteDocument()" class="btn btn-delete">删除文档</button>
+                </div>
+
+                <!-- 状态栏 -->
+                <div class="status-bar">
+                    <div class="auto-save-status">
+                        <span class="save-indicator" id="saveIndicator">✓ 已保存</span>
+                        <span class="saving-indicator" id="savingIndicator">正在保存...</span>
+                        <span id="lastSaveTime">最后保存: --</span>
+                    </div>
+                    <div>
+                        <span id="changeStatus">无更改</span>
+                    </div>
+                </div>
+
+                <!-- 视频会议面板 -->
+                <div id="videoConferencePanel" class="video-conference-panel">
+                    <div class="conference-header">
+                        <h3 id="conferenceTitle">视频会议</h3>
+                        <button class="conference-close" onclick="leaveConference()">×</button>
+                    </div>
+
+                    <div class="conference-content">
+                        <!-- 视频区域 -->
+                        <div class="video-container" id="videoContainer">
+                            <!-- 视频流将在这里动态添加 -->
+                        </div>
+
+                        <!-- 侧边栏 -->
+                        <div class="sidebar">
+                            <!-- 参与者列表 -->
+                            <div class="participants-list" id="participantsList">
+                                <!-- 参与者列表将在这里动态生成 -->
+                            </div>
+
+                            <!-- 聊天区域 -->
+                            <div class="chat-container">
+                                <div class="chat-messages" id="chatMessages">
+                                    <!-- 聊天消息将在这里动态显示 -->
+                                </div>
+                                <div class="chat-input">
+                                    <form onsubmit="sendChatMessage(event)">
+                                        <input type="text" id="chatInput" placeholder="输入消息..." maxlength="500">
+                                        <button type="submit">发送</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 控制按钮 -->
+                    <div class="conference-controls">
+                        <button class="control-button outline" onclick="toggleVideo()" id="videoToggle">
+                            📹 关闭视频
+                        </button>
+                        <button class="control-button outline" onclick="toggleAudio()" id="audioToggle">
+                            🎤 静音
+                        </button>
+                        <button class="control-button outline" onclick="toggleScreenSharing()" id="screenShareToggle">
+                            🖥️ 共享屏幕
+                        </button>
+                        <button class="control-button danger" onclick="leaveConference()">
+                            🚪 离开会议
+                        </button>
+                        <button class="control-button danger" onclick="endConference()">
+                            🔚 结束会议
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 会议管理模态框 -->
+                <div id="conferenceManagementModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>视频会议管理</h3>
+                            <span class="close" onclick="closeConferenceManagementModal()">&times;</span>
+                        </div>
+                        <div class="modal-body">
+<!--                            <div class="conference-tabs">-->
+<!--                                <button class="tab-button active" onclick="switchConferenceTab('create')">创建会议</button>-->
+<!--                                <button class="tab-button" onclick="switchConferenceTab('join')">加入会议</button>-->
+<!--                            </div>-->
+
+                            <div id="createConferenceTab" class="tab-content active">
+                                <div class="create-conference-form">
+                                    <div class="form-row">
+                                        <label for="conferenceTitleInput">会议标题</label>
+                                        <input type="text" id="conferenceTitleInput" placeholder="请输入会议标题" maxlength="100">
+                                    </div>
+                                    <div class="form-row">
+                                        <label for="conferenceDescription">会议描述</label>
+                                        <textarea id="conferenceDescription" placeholder="请输入会议描述（可选）"></textarea>
+                                    </div>
+                                    <div class="form-row">
+                                        <label for="maxParticipants">最大参与人数</label>
+                                        <input type="number" id="maxParticipants" value="10" min="2" max="20">
+                                    </div>
+                                    <button class="control-button primary" onclick="createConference()">创建会议</button>
+                                </div>
+                            </div>
+
+                            <div id="joinConferenceTab" class="tab-content">
+                                <div class="conference-list" id="availableConferences">
+                                    <!-- 可用会议列表将在这里动态生成 -->
+                                </div>
+                                <div class="no-conferences" id="noConferences" style="display: none;">
+                                    <p>当前没有可用的会议</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 引入Quill富文本编辑器 -->
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<!-- 引入Markdown编辑器 -->
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<!-- 引入Marked用于Markdown预览 -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<!-- 新增：引入WebSocket相关库 -->
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script src="js/collaboration.js"></script>
+<script src="js/managers/collaborations.js"></script>
+<script src="js/managers/comments.js"></script>
+<script src="js/managers/tasks.js"></script>
+<script src="js/managers/notification.js"></script>
+<script src="js/video-conference.js"></script>
+
+<script>
+    let currentDocumentId = null;
+    let quill = null;
+    let easyMDE = null;
+    let currentDocumentType = '';
+    let isChanged = false;
+    let lastSaveTime = null;
+    let isOwner = false;
+    let exportModal = null;
+
+    // 协作管理器实例
+    let collaborationManager = null;
+    let commentManager = null;
+    let taskManager = null;
+    let notificationManager = null;
+
+    // 新增：视频会议管理器实例、视频会议UI
+    let videoConferenceManager = null;
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        collaborationSocket.connect();
+
+        // 获取URL参数中的文档ID
+        const urlParams = new URLSearchParams(window.location.search);
+        currentDocumentId = urlParams.get('id');
+
+        if (!currentDocumentId) {
+            alert('无效的文档ID');
+            window.location.href = 'my-documents.html';
+            return;
+        }
+
+        // 设置隐藏字段
+        document.getElementById('documentId').value = currentDocumentId;
+
+        // 初始化编辑器
+        initializeEditors();
+        setupEventListeners();
+        setupCharacterCounters();
+
+        // 新增：初始化协作管理器
+        initializeCollaborationManagers();
+
+        // 加载文档详情
+        loadDocumentDetail(currentDocumentId, true);
+
+        exportModal = document.getElementById('exportModal');
+    });
+
+    // 新增：初始化协作管理器
+    async function initializeCollaborationManagers() {
+        // 初始化协作管理器
+        collaborationManager = new CollaborationManager();
+        await collaborationManager.initialize(currentDocumentId);
+
+        // 初始化评论管理器
+        commentManager = new CommentManager();
+        window.commentManager = commentManager; // 设置全局引用
+        await commentManager.initialize(currentDocumentId);
+
+        // 初始化任务管理器
+        taskManager = new TaskManager();
+        window.taskManager = taskManager;
+        await taskManager.initialize(currentDocumentId);
+
+        // 初始化通知管理器
+        notificationManager = new NotificationManager();
+        window.notificationManager = notificationManager;
+        await notificationManager.initialize();
+
+        // 初始化视频会议管理器
+        videoConferenceManager = new VideoConferenceManager();
+        window.videoConferenceManager = videoConferenceManager;
+        await videoConferenceManager.initialize(currentDocumentId);
+    }
+
+    // 初始化编辑器
+    function initializeEditors() {
+        // 初始化富文本编辑器
+        quill = new Quill('#richTextEditor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['link', 'image'],
+                    ['clean']
+                ]
+            },
+            placeholder: '请输入文档内容...'
+        });
+
+        // 初始化Markdown编辑器
+        easyMDE = new EasyMDE({
+            element: document.getElementById('markdownEditor'),
+            spellChecker: false,
+            autosave: {
+                enabled: false
+            },
+            placeholder: '请输入Markdown内容...',
+            toolbar: [
+                'bold', 'italic', 'heading', '|',
+                'code', 'quote', 'unordered-list', 'ordered-list', '|',
+                'link', 'image', '|',
+                'preview', 'side-by-side', 'fullscreen', '|',
+                'guide'
+            ]
+        });
+
+        // 新增：设置全局引用
+        window.quill = quill;
+        window.easyMDE = easyMDE;
+        window.currentDocumentType = currentDocumentType;
+    }
+
+    // 设置事件监听器
+    function setupEventListeners() {
+        // 富文本编辑器变化监听
+        // 在初始化的时候就会触发一次text-change，所以应当设置延迟
+        setTimeout(() => {
+            quill.on('text-change', function(delta, oldDelta, source) {
+                if (source === 'user') {
+                    markAsChanged();
+
+                    // 发送内容更新到其他协作者
+                    if (collaborationManager) {
+                        const content = quill.root.innerHTML;
+                        collaborationManager.sendContentUpdate(content);
+                    }
+                }
+            });
+
+            // 监听光标活动
+            quill.on('selection-change', (range, oldRange, source) => {
+                if (range && source === 'user' && collaborationManager) {
+                    const position = collaborationManager.calculateQuillCursorPosition(range);
+                    collaborationManager.sendCursorUpdate(position);
+                }
+            });
+        }, 100);
+
+        // Markdown编辑器变化监听
+        setTimeout(() => {
+            easyMDE.codemirror.on('change', () => {
+                    updateMarkdownPreview();
+                    markAsChanged();
+
+                    // 发送内容更新到其他协作者
+                    if (collaborationManager) {
+                        const content = easyMDE.value();
+                        collaborationManager.sendContentUpdate(content);
+                    }
+            });
+
+            // 监听光标活动
+            easyMDE.codemirror.on('cursorActivity', () => {
+                if (collaborationManager) {
+                    const cursor = easyMDE.codemirror.getCursor();
+                    const position = easyMDE.codemirror.indexFromPos(cursor);
+                    collaborationManager.sendCursorUpdate(position);
+                }
+            });
+        }, 100);
+    }
+
+    // 设置字符计数器
+    function setupCharacterCounters() {
+        const titleInput = document.getElementById('title');
+        const titleCount = document.getElementById('titleCount');
+
+        titleInput.addEventListener('input', function() {
+            titleCount.textContent = this.value.length;
+        });
+
+        // 初始化计数
+        titleCount.textContent = titleInput.value.length;
+    }
+
+    // 更新Markdown预览
+    function updateMarkdownPreview() {
+        const content = easyMDE.value();
+        const preview = document.getElementById('markdownPreview');
+        preview.innerHTML = marked.parse(content || '');
+    }
+
+    // 标记为已更改
+    function markAsChanged() {
+        if (!isChanged) {
+            isChanged = true;
+            document.getElementById('changeStatus').textContent = '有未保存的更改';
+            document.getElementById('changeStatus').style.color = '#dc3545';
+        }
+        autoSaveDocument();
+    }
+
+    // 自动保存文档
+    async function autoSaveDocument() {
+        if (!isChanged || !currentDocumentId) {
+            return;
+        }
+
+        try {
+            const content = getCurrentContent();
+            if (!content) {
+                return;
+            }
+
+            // 显示保存中状态
+            document.getElementById('savingIndicator').style.display = 'inline';
+
+            await documentAPI.autoSaveDocument(currentDocumentId, content);
+
+            // 更新最后保存时间
+            lastSaveTime = new Date();
+            document.getElementById('lastSaveTime').textContent = `最后保存: ${lastSaveTime.toLocaleTimeString()}`;
+
+            // 隐藏保存中状态
+            document.getElementById('savingIndicator').style.display = 'none';
+
+        } catch (error) {
+            console.error('自动保存失败:', error);
+            document.getElementById('savingIndicator').style.display = 'none';
+        }
+    }
+
+    // 获取当前内容
+    function getCurrentContent() {
+        if (currentDocumentType === 'RICH_TEXT') {
+            return quill.root.innerHTML;
+        } else if (currentDocumentType === 'MARKDOWN') {
+            return easyMDE.value();
+        }
+        return '';
+    }
+
+    // 加载文档详情
+    async function loadDocumentDetail(documentId, restore = false) {
+        try {
+            const response = await documentAPI.getDocumentDetail(documentId);
+            if (response.success) {
+                const documentData = response.data; // 这里应该是 response.data
+                await populateForm(documentData, restore);
+            } else {
+                alert('加载文档详情失败: ' + response.message);
+                window.location.href = 'my-documents.html';
+            }
+        } catch (error) {
+            console.error('加载文档详情错误:', error);
+            alert('加载文档详情失败: ' + error.message);
+            window.location.href = 'my-documents.html';
+        }
+    }
+
+    // 填充表单数据
+    async function populateForm(documentData, restore) {
+        let currentUser = null;
+        try {
+            // 获取当前用户的完整信息
+            const userResponse = await user.getProfile();
+            if (userResponse.success) {
+                currentUser = userResponse.data;
+            }
+        } catch (error) {
+            console.error('获取用户角色失败:', error);
+        }
+
+        // 保存文档类型
+        currentDocumentType = documentData.type || '';
+        window.currentDocumentType = currentDocumentType;
+
+        // 检查是否有自动保存内容
+        let contentToLoad = documentData.content || '';
+
+        if (currentUser.role !== 'VIEWER') {
+            if (restore === true) {
+                if (documentData.autoSaveContent) {
+                    const shouldRestore = confirm('检测到上次未保存的内容，是否恢复？\n点击"确定"恢复未保存的内容，点击"取消"使用已保存的内容。');
+                    if (shouldRestore) {
+                        contentToLoad = documentData.autoSaveContent;
+                        alert('已恢复上次未保存的内容');
+                    }
+                }
+            }
+        }
+
+        // 填充表单字段
+        document.getElementById('title').value = documentData.title || '';
+        document.getElementById('documentId').value = documentData.id || '';
+
+        // 根据文档类型显示对应的编辑器
+        if (currentDocumentType === 'RICH_TEXT') {
+            quill.root.innerHTML = contentToLoad;
+            document.getElementById('richTextPanel').classList.add('active');
+            document.getElementById('editorTypeBadge').textContent = '富文本';
+            document.getElementById('editorTypeBadge').style.background = '#007bff';
+        } else if (currentDocumentType === 'MARKDOWN') {
+            easyMDE.value(contentToLoad);
+            updateMarkdownPreview();
+            document.getElementById('markdownPanel').classList.add('active');
+            document.getElementById('editorTypeBadge').textContent = 'Markdown';
+            document.getElementById('editorTypeBadge').style.background = '#28a745';
+        }
+
+        // 更新字符计数
+        document.getElementById('titleCount').textContent = documentData.title ? documentData.title.length : 0;
+
+        // 更新文档信息显示
+        document.getElementById('createdAt').textContent = new Date(documentData.createdAt).toLocaleString();
+        document.getElementById('updatedAt').textContent = new Date(documentData.updatedAt).toLocaleString();
+        document.getElementById('documentStatus').textContent = getStatusText(documentData.status);
+        document.getElementById('documentVersion').textContent = documentData.version || '1';
+        document.getElementById('documentOwner').textContent = documentData.owner || '';
+
+        // 检查是否是文档所有者
+        isOwner = documentData.owner === currentUser.username;
+
+        // 如果是所有者，显示协作者管理区域
+        if (isOwner) {
+            document.getElementById('collaboratorsSection').style.display = 'block';
+            displayCollaborators(documentData.collaborators || []);
+        }
+
+        await checkUserRoleAndSetPermissions(currentUser.role);
+
+        // 重置更改状态
+		if (documentData.autoSaveContent) {
+            isChanged = true;
+            console.log('isChanged === true');
+			document.getElementById('changeStatus').textContent = '有未保存的更改';
+            document.getElementById('changeStatus').style.color = '#dc3545';
+        } else {
+			isChanged = false;
+			document.getElementById('changeStatus').textContent = '无更改';
+			document.getElementById('changeStatus').style.color = '#666';
+		}
+    }
+
+    // 检查用户角色并设置权限
+    async function checkUserRoleAndSetPermissions(userRole) {
+        // 如果是查看者角色，禁用编辑功能
+        if (userRole === 'VIEWER') {
+            setViewerPermissions();
+        }
+    }
+
+    // 设置查看者权限（禁用编辑功能）
+    function setViewerPermissions() {
+        // 禁用文档标题输入框
+        const titleInput = document.getElementById('title');
+        titleInput.disabled = true;
+        titleInput.placeholder = '仅可查看';
+
+        // 禁用富文本编辑器
+        if (quill) {
+            quill.disable();
+            const editorContainer = document.querySelector('#richTextPanel .ql-editor');
+            if (editorContainer) {
+                editorContainer.style.cursor = 'not-allowed';
+                editorContainer.style.opacity = '0.7';
+            }
+        }
+
+        // 禁用Markdown编辑器
+        if (easyMDE) {
+            easyMDE.codemirror.setOption('readOnly', true);
+            const markdownEditor = document.getElementById('markdownEditor');
+            if (markdownEditor) {
+                markdownEditor.style.cursor = 'not-allowed';
+                markdownEditor.style.opacity = '0.7';
+            }
+        }
+
+        // 禁用保存修改按钮
+        const saveButton = document.querySelector('.btn.btn-primary');
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.style.cursor = 'not-allowed';
+            saveButton.style.opacity = '0.7';
+        }
+
+        // 禁用取消按钮
+        const cancelButton = document.querySelector('.btn.btn-outline');
+        if (cancelButton) {
+            cancelButton.disabled = true;
+            cancelButton.style.cursor = 'not-allowed';
+            cancelButton.style.opacity = '0.7';
+        }
+
+        // 禁用删除文档按钮
+        const deleteButton = document.querySelector('.btn.btn-delete');
+        if (deleteButton) {
+            deleteButton.disabled = true;
+            deleteButton.style.cursor = 'not-allowed';
+            deleteButton.style.opacity = '0.7';
+        }
+
+        // 隐藏协作者管理区域
+        document.getElementById('collaboratorsSection').style.display = 'none';
+
+        // 禁用协作者添加功能
+        const collaboratorInput = document.getElementById('collaboratorUsername');
+        const addCollaboratorButton = document.querySelector('.add-collaborator-form .btn');
+        if (collaboratorInput) collaboratorInput.disabled = true;
+        if (addCollaboratorButton) addCollaboratorButton.disabled = true;
+    }
+
+    // 显示协作者列表
+    function displayCollaborators(collaborators) {
+        const collaboratorsList = document.getElementById('collaboratorsList');
+
+        if (collaborators.length === 0) {
+            collaboratorsList.innerHTML = '<div style="color: #666;">暂无协作者</div>';
+            return;
+        }
+
+        let html = '';
+        collaborators.forEach(collaborator => {
+            html += `
+                <div class="collaborator-tag">
+                    ${collaborator}
+                    ${isOwner ? `<span class="remove-collaborator" onclick="removeCollaborator('${collaborator}')">×</span>` : ''}
+                </div>
+            `;
+        });
+
+        collaboratorsList.innerHTML = html;
+    }
+
+    // 保存文档
+    async function saveDocument() {
+        const title = document.getElementById('title').value.trim();
+        const documentId = document.getElementById('documentId').value;
+
+        if (!title) {
+            alert('请输入文档标题');
+            return;
+        }
+
+        const content = getCurrentContent();
+        if (!content) {
+            alert('请输入文档内容');
+            return;
+        }
+
+        try {
+            // 显示保存中状态
+            document.getElementById('savingIndicator').style.display = 'inline';
+
+            const updateData = {
+                title: title,
+                content: content
+            };
+
+            const response = await documentAPI.updateDocument(documentId, updateData);
+
+            if (response.success) {
+                // 重置更改状态
+                isChanged = false;
+                document.getElementById('changeStatus').textContent = '无更改';
+                document.getElementById('changeStatus').style.color = '#666';
+
+                // 显示保存成功状态
+                document.getElementById('saveIndicator').style.display = 'inline';
+                document.getElementById('savingIndicator').style.display = 'none';
+                setTimeout(() => {
+                    document.getElementById('saveIndicator').style.display = 'none';
+                }, 3000);
+
+                // 更新文档信息
+                document.getElementById('documentVersion').textContent = response.data.version || '1';
+                document.getElementById('updatedAt').textContent = new Date().toLocaleString();
+
+                alert('文档保存成功！');
+            } else {
+                alert('保存失败: ' + response.message);
+                document.getElementById('savingIndicator').style.display = 'none';
+            }
+        } catch (error) {
+            console.error('保存文档错误:', error);
+            alert('保存失败: ' + error.message);
+            document.getElementById('savingIndicator').style.display = 'none';
+        }
+    }
+
+    // 添加协作者
+    async function addCollaborator() {
+        const username = document.getElementById('collaboratorUsername').value.trim();
+
+        if (!username) {
+            alert('请输入用户名');
+            return;
+        }
+
+        try {
+            // 先根据用户名获取用户ID
+            const userResponse = await user.getProfileByUsername(username);
+
+            if (!userResponse.success) {
+                alert('用户不存在: ' + (userResponse.message || '请检查用户名是否正确'));
+                return;
+            }
+
+            const userId = userResponse.data.userId;
+            if (!userId) {
+                alert('无法获取用户ID');
+                return;
+            }
+
+            // 添加协作者
+            const response = await documentAPI.addCollaborator(currentDocumentId, userId);
+
+            if (response.success) {
+                alert('协作者添加成功！');
+                document.getElementById('collaboratorUsername').value = '';
+                // 重新加载文档详情以更新协作者列表
+                loadDocumentDetail(currentDocumentId);
+            } else {
+                alert('添加失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('添加协作者错误:', error);
+            alert('添加失败: ' + error.message);
+        }
+    }
+
+    // 移除协作者
+    async function removeCollaborator(username) {
+        if (!confirm(`确定要移除协作者 "${username}" 吗？`)) {
+            return;
+        }
+
+        try {
+            // 根据用户名获取用户ID
+            const userResponse = await user.getUserIdByUsername(username);
+
+            if (!userResponse.success) {
+                alert('用户不存在: ' + (userResponse.message || '无法找到该用户'));
+                return;
+            }
+
+            const userId = userResponse.data.userId;
+            if (!userId) {
+                alert('无法获取用户ID');
+                return;
+            }
+
+            // 移除协作者
+            const response = await documentAPI.removeCollaborator(currentDocumentId, userId);
+
+            if (response.success) {
+                alert('协作者移除成功！');
+                // 重新加载文档详情以更新协作者列表
+                loadDocumentDetail(currentDocumentId);
+            } else {
+                alert('移除失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('移除协作者错误:', error);
+            alert('移除失败: ' + error.message);
+        }
+    }
+
+    // 删除文档
+    async function deleteDocument() {
+        const documentId = document.getElementById('documentId').value;
+        const documentTitle = document.getElementById('title').value;
+
+        if (!confirm(`确定要删除文档 "${documentTitle}" 吗？此操作将把文档移到回收站。`)) {
+            return;
+        }
+
+        try {
+            const response = await documentAPI.deleteDocument(documentId);
+
+            if (response.success) {
+                alert('文档删除成功！');
+                // 清理协作资源
+                if (collaborationManager) {
+                    collaborationManager.cleanup();
+                }
+                // 返回到文档列表页面
+                window.location.href = 'my-documents.html';
+            } else {
+                alert('删除失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('删除文档错误:', error);
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    // 获取状态文本
+    function getStatusText(status) {
+        const statusMap = {
+            'EXISTS': '存在',
+            'DELETED': '已删除'
+        };
+        return statusMap[status] || status;
+    }
+
+    // 返回上一页
+    async function goBack() {
+        let currentUser = null;
+        try {
+            // 获取当前用户的完整信息
+            const userResponse = await user.getProfile();
+            if (userResponse.success) {
+                currentUser = userResponse.data;
+            }
+        } catch (error) {
+            console.error('获取用户角色失败:', error);
+        }
+
+        if (currentUser.role !== 'VIEWER') {
+            if (isChanged) {
+                console.log('go back -> isChanged === true');
+                const shouldLeave = confirm('您有未保存的更改，确定要离开吗？');
+                if (!shouldLeave) {
+                    return;
+                }
+            }
+        }
+
+        // 清理协作资源
+        if (collaborationManager) {
+            collaborationManager.cleanup();
+        }
+
+        window.history.back();
+    }
+
+    // 退出登录
+    function logout() {
+        // 清理协作资源
+        if (collaborationManager) {
+            collaborationManager.cleanup();
+        }
+
+        window.location.href = 'login.html';
+    }
+
+    // 显示导出选项
+    function showExportOptions() {
+        const exportOptions = document.getElementById('exportOptions');
+
+        // 根据文档类型生成不同的导出选项
+        if (currentDocumentType === 'MARKDOWN') {
+            exportOptions.innerHTML = `
+                <div class="export-option" onclick="exportMarkdown('md')">
+                    <i>📄</i>
+                    <div class="export-option-text">
+                        <div class="export-option-title">导出为 Markdown (.md)</div>
+                        <div class="export-option-desc">保留原始Markdown格式，适合在其他Markdown编辑器中打开</div>
+                    </div>
+                </div>
+                <div class="export-option" onclick="exportMarkdown('pdf')">
+                    <i>📊</i>
+                    <div class="export-option-text">
+                        <div class="export-option-title">导出为 PDF (.pdf)</div>
+                        <div class="export-option-desc">生成格式化的PDF文档，适合打印和分享</div>
+                    </div>
+                </div>
+            `;
+        } else if (currentDocumentType === 'RICH_TEXT') {
+            exportOptions.innerHTML = `
+                <div class="export-option" onclick="exportRichText('html')">
+                    <i>🌐</i>
+                    <div class="export-option-text">
+                        <div class="export-option-title">导出为 HTML (.html)</div>
+                        <div class="export-option-desc">保留富文本格式，可在浏览器中直接查看</div>
+                    </div>
+                </div>
+                <div class="export-option" onclick="exportRichText('pdf')">
+                    <i>📊</i>
+                    <div class="export-option-text">
+                        <div class="export-option-title">导出为 PDF (.pdf)</div>
+                        <div class="export-option-desc">生成格式化的PDF文档，适合打印和分享</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 显示模态框
+        exportModal.style.display = 'flex';
+    }
+
+    // 关闭导出模态框
+    function closeExportModal() {
+        exportModal.style.display = 'none';
+    }
+
+    // 导出Markdown文档
+    async function exportMarkdown(format) {
+        closeExportModal();
+
+        const title = document.getElementById('title').value.trim() || '未命名文档';
+        const content = easyMDE.value();
+
+        if (!content) {
+            alert('文档内容为空，无法导出');
+            return;
+        }
+
+        if (format === 'md') {
+            // 导出为.md文件
+            const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title}.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } else if (format === 'pdf') {
+            // 导出为PDF文件
+            await exportToPDF(title, content, 'markdown');
+        }
+    }
+
+    // 导出富文本文档
+    async function exportRichText(format) {
+        closeExportModal();
+
+        const title = document.getElementById('title').value.trim() || '未命名文档';
+        const content = quill.root.innerHTML;
+
+        if (!content || content === '<p><br></p>') {
+            alert('文档内容为空，无法导出');
+            return;
+        }
+
+        if (format === 'html') {
+            // 导出为.html文件
+            const htmlContent = `<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>${title}</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; }
+        </style>
+    </head>
+    <body>
+        <h1>${title}</h1>
+        ${content}
+    </body>
+    </html>`;
+
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title}.html`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } else if (format === 'pdf') {
+            // 导出为PDF文件
+            await exportToPDF(title, content, 'html');
+        }
+    }
+
+    // 导出为PDF
+    async function exportToPDF(title, content, type) {
+        try {
+            // 显示导出中提示
+            alert('正在生成PDF，请稍候...');
+
+            // 动态加载jsPDF和html2canvas库
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+
+            const { jsPDF } = window.jspdf;
+
+            // 创建临时元素用于PDF生成
+            const tempElement = document.createElement('div');
+            tempElement.style.position = 'absolute';
+            tempElement.style.left = '-9999px';
+            tempElement.style.top = '0';
+            tempElement.style.width = '800px';
+            tempElement.style.padding = '20px';
+            tempElement.style.backgroundColor = 'white';
+
+            if (type === 'markdown') {
+                // 将Markdown转换为HTML
+                tempElement.innerHTML = `
+                    <h1 style="text-align: center; margin-bottom: 30px;">${title}</h1>
+                    <div style="line-height: 1.6; font-family: Arial, sans-serif;">
+                        ${marked.parse(content)}
+                    </div>
+                `;
+            } else {
+                // 直接使用富文本HTML内容
+                tempElement.innerHTML = `
+                    <h1 style="text-align: center; margin-bottom: 30px;">${title}</h1>
+                    <div style="line-height: 1.6; font-family: Arial, sans-serif;">
+                        ${content}
+                    </div>
+                `;
+            }
+
+            document.body.appendChild(tempElement);
+
+            // 使用html2canvas将HTML转换为图片
+            const canvas = await html2canvas(tempElement, {
+                scale: 2, // 提高分辨率
+                useCORS: true,
+                logging: false
+            });
+
+            // 从canvas创建图片数据
+            const imgData = canvas.toDataURL('image/png');
+
+            // 创建PDF
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            // 获取PDF页面尺寸
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+
+            // 计算图片在PDF中的尺寸
+            const imgWidth = pageWidth - 20; // 留出边距
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            // 添加图片到PDF
+            let heightLeft = imgHeight;
+            let position = 10; // 初始Y位置
+
+            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            // 如果内容超过一页，添加新页面
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight + 10;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            // 保存PDF
+            pdf.save(`${title}.pdf`);
+
+            // 清理临时元素
+            document.body.removeChild(tempElement);
+
+        } catch (error) {
+            console.error('PDF导出失败:', error);
+            alert('PDF导出失败: ' + error.message);
+        }
+    }
+
+    // 动态加载脚本
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            // 检查是否已加载
+            if (document.querySelector(`script[src="${src}"]`)) {
+                resolve();
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
+    // 侧边栏切换函数
+    function toggleCommentSidebar() {
+        const sidebar = document.getElementById('commentSidebar');
+        if (sidebar) {
+            sidebar.classList.toggle('active');
+        }
+    }
+
+    function toggleTaskSidebar() {
+        const sidebar = document.getElementById('taskSidebar');
+        if (sidebar) {
+            sidebar.classList.toggle('active');
+        }
+    }
+
+    function toggleNotificationPanel() {
+        const panel = document.getElementById('notificationPanel');
+        if (panel) {
+            panel.classList.toggle('active');
+        }
+    }
+
+    // 评论相关函数
+    async function addNewComment() {
+        if (commentManager) {
+            await commentManager.addNewComment();
+        }
+    }
+
+    async function submitReply(commentId, button) {
+        if (commentManager) {
+            await commentManager.submitReply(commentId, button);
+        }
+    }
+
+    function cancelReply(button) {
+        if (commentManager) {
+            commentManager.cancelReply(button);
+        }
+    }
+
+    async function resolveComment(commentId) {
+        if (commentManager) {
+            await commentManager.resolveComment(commentId);
+        }
+    }
+
+    async function deleteComment(commentId) {
+        if (commentManager) {
+            await commentManager.deleteComment(commentId);
+        }
+    }
+
+    // 任务相关函数
+    function showCreateTaskModal() {
+        if (taskManager) {
+            taskManager.showCreateTaskModal();
+        }
+    }
+
+    function closeCreateTaskModal() {
+        if (taskManager) {
+            taskManager.closeCreateTaskModal();
+        }
+    }
+
+    function createNewTask() {
+        if (taskManager) {
+            taskManager.createNewTask();
+        }
+    }
+
+    async function updateTaskStatus(taskId, status) {
+        if (taskManager) {
+            await taskManager.updateTaskStatus(taskId, status);
+        }
+    }
+
+    // 通知相关函数
+    async function markAsRead(notificationId) {
+        if (notificationManager) {
+            await notificationManager.markAsRead(notificationId);
+        }
+    }
+
+    async function markAllAsRead() {
+        if (notificationManager) {
+            await notificationManager.markAllAsRead();
+        }
+    }
+
+    async function deleteNotification(notificationId) {
+        if (notificationManager) {
+            await notificationManager.deleteNotification(notificationId);
+        }
+    }
+
+    function showReplyForm(commentId) {
+        if (commentManager) {
+            commentManager.showReplyForm(commentId);
+        }
+    }
+
+    // 会议相关函数
+    async function toggleVideoConferencePanel() {
+        const panel = document.getElementById('videoConferencePanel');
+        if (panel && panel.classList.contains('active')) {
+            // 如果会议面板是打开的，关闭它
+            panel.classList.remove('active');
+        } else {
+            // 如果会议面板是关闭的，显示会议管理模态框
+            await showConferenceManagementModal();
+        }
+    }
+
+    async function showConferenceManagementModal() {
+        const modal = document.getElementById('conferenceManagementModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            // 加载可用会议列表
+            if (window.videoConferenceManager) {
+                await window.videoConferenceManager.loadDocumentConferences();
+            }
+        }
+    }
+
+    function closeConferenceManagementModal() {
+        const modal = document.getElementById('conferenceManagementModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    function switchConferenceTab(tabName) {
+        // 隐藏所有标签内容
+        const tabContents = document.querySelectorAll('.tab-content');
+        tabContents.forEach(tab => tab.classList.remove('active'));
+
+        // 显示选中的标签内容
+        const selectedTab = document.getElementById(tabName + 'ConferenceTab');
+        if (selectedTab) {
+            selectedTab.classList.add('active');
+        }
+    }
+
+    async function createConference() {
+        const title = document.getElementById('conferenceTitleInput').value.trim();
+        const description = document.getElementById('conferenceDescription').value.trim();
+        const maxParticipants = parseInt(document.getElementById('maxParticipants').value) || 10;
+
+        if (!title) {
+            alert('请输入会议标题');
+            return;
+        }
+
+        if (window.videoConferenceManager) {
+            const success = await window.videoConferenceManager.createConference(title, description, maxParticipants);
+            if (success) {
+                closeConferenceManagementModal();
+            }
+        }
+    }
+
+    async function joinConference(conferenceId) {
+        if (window.videoConferenceManager) {
+            const success = await window.videoConferenceManager.joinConference(conferenceId);
+            if (success) {
+                closeConferenceManagementModal();
+            }
+        }
+    }
+
+    async function sendChatMessage(event) {
+        event.preventDefault();
+
+        const chatInput = document.getElementById('chatInput');
+        const content = chatInput.value.trim();
+
+        if (content && window.videoConferenceManager) {
+            await window.videoConferenceManager.sendChatMessage(content);
+            chatInput.value = '';
+        }
+    }
+
+    async function toggleVideo() {
+        if (window.videoConferenceManager) {
+            await window.videoConferenceManager.toggleVideo();
+        }
+    }
+
+    async function toggleAudio() {
+        if (window.videoConferenceManager) {
+            await window.videoConferenceManager.toggleAudio();
+        }
+    }
+
+    async function toggleScreenSharing() {
+        if (window.videoConferenceManager) {
+            await window.videoConferenceManager.toggleScreenSharing();
+        }
+    }
+
+    async function leaveConference() {
+        if (window.videoConferenceManager) {
+            await window.videoConferenceManager.leaveConference();
+        }
+    }
+
+    async function endConference() {
+        if (window.videoConferenceManager && confirm('确定要结束会议吗？所有参与者都会被踢出会议。')) {
+            await window.videoConferenceManager.endConference();
+        }
+    }
+
+    window.addEventListener('click', function(event) {
+        if (event.target === exportModal) {
+            closeExportModal();
+        }
+
+        // 任务创建模态框
+        const taskModal = document.getElementById('createTaskModal');
+        if (event.target === taskModal) {
+            closeCreateTaskModal();
+        }
+
+        // 视频会议管理模态框
+        const modal = document.getElementById('conferenceManagementModal');
+        if (event.target === modal) {
+            closeConferenceManagementModal();
+        }
+    });
+
+    // 页面卸载时清理资源
+    window.addEventListener('beforeunload', function() {
+        if (collaborationManager) {
+            collaborationManager.cleanup();
+        }
+        if (videoConferenceManager) {
+            videoConferenceManager.leaveConference();
+        }
+    });
+</script>
+</body>
+</html>

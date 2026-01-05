@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档智能归类 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/document-classification-ai-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>文档智能归类 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <button onclick="goBack()" class="btn">返回</button>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="clustering-container">
+                <div class="clustering-header">
+                    <h2>文档智能归类</h2>
+                    <p>AI将文档自动按主题分类</p>
+                </div>
+
+                <div class="config-panel">
+                    <div class="k-selector">
+                        <label for="kValue">类别数量 (k):</label>
+                        <input type="number" id="kValue" class="k-input" min="2" max="10" value="3">
+                    </div>
+                    <button id="clusterBtn" class="cluster-btn" onclick="performClustering()">开始归类分析</button>
+                    <div class="clustering-info">
+                        💡 请选择要将文档归为几个类别
+                    </div>
+                </div>
+
+                <div id="resultsContainer" class="results-container">
+                    <div class="results-header">
+                        <h3>归类结果</h3>
+                        <div id="resultsInfo" class="results-count"></div>
+                    </div>
+                    <div id="classesGrid" class="classes-grid">
+                        <!-- 归类结果将在这里显示 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+
+<script>
+    let isLoading = false;
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+    });
+
+    // 执行聚类分析
+    async function performClustering() {
+        const kInput = document.getElementById('kValue');
+        const clusterBtn = document.getElementById('clusterBtn');
+        const kValue = parseInt(kInput.value);
+
+        if (isNaN(kValue) || kValue < 2 || kValue > 10) {
+            alert('请输入2-10之间的有效类别数量');
+            return;
+        }
+
+        if (isLoading) return;
+
+        // 设置加载状态
+        isLoading = true;
+        clusterBtn.disabled = true;
+        clusterBtn.textContent = '分析中...';
+
+        try {
+            // 显示加载状态
+            showLoading();
+
+            // 调用聚类API
+            const response = await documentAPI.documentClustering(kValue);
+
+            if (response.success) {
+                displayClusteringResults(response.data);
+            } else {
+                showError('聚类分析失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('聚类分析错误:', error);
+            showError('聚类分析失败: ' + error.message);
+        } finally {
+            // 恢复按钮状态
+            isLoading = false;
+            clusterBtn.disabled = false;
+            clusterBtn.textContent = '开始聚类分析';
+        }
+    }
+
+    // 显示加载状态
+    function showLoading() {
+        const resultsContainer = document.getElementById('resultsContainer');
+        const classesGrid = document.getElementById('classesGrid');
+
+        resultsContainer.style.display = 'block';
+        classesGrid.innerHTML = `
+            <div class="loading">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                <div>AI正在分析文档内容...</div>
+            </div>
+        `;
+        document.getElementById('resultsInfo').textContent = '分析中...';
+    }
+
+    // 显示聚类结果
+    function displayClusteringResults(data) {
+        const resultsContainer = document.getElementById('resultsContainer');
+        const classesGrid = document.getElementById('classesGrid');
+        const resultsInfo = document.getElementById('resultsInfo');
+
+        resultsContainer.style.display = 'block';
+
+        if (!data.classes || data.classes.length === 0) {
+            classesGrid.innerHTML = `
+                <div class="no-documents">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">📁</div>
+                    <div>没有找到可聚类的文档</div>
+                    <div style="margin-top: 0.5rem; font-size: 0.9rem; color: #999;">
+                        请确保您有可访问的文档
+                    </div>
+                </div>
+            `;
+            resultsInfo.textContent = '无聚类结果';
+            return;
+        }
+
+        resultsInfo.textContent = `共生成 ${data.totalClasses} 个文档类别`;
+
+        let html = '';
+        const colors = [
+            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)'
+        ];
+
+        data.classes.forEach((classData, index) => {
+            const color = colors[index % colors.length];
+            const themeWords = classData.themeWords || [];
+            const documents = classData.documents || [];
+
+            html += `
+                <div class="class-card">
+                    <div class="class-header" style="background: ${color}">
+                        <div class="class-theme">类别 ${index + 1}</div>
+                        <div class="theme-words">
+                            ${themeWords.map(word =>
+                                `<span class="theme-word">${word}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    <div class="class-body">
+                        <div class="documents-count">包含 ${documents.length} 个文档</div>
+                        <div class="documents-scroll">
+                            ${documents.length > 0 ?
+                                documents.map(doc => `
+                                    <div class="document-item" onclick="openDocument(${doc.id})">
+                                        <div class="document-title">
+                                            ${doc.title || '未命名文档'}
+                                            <span class="document-type">${getDocumentTypeText(doc.type)}</span>
+                                        </div>
+                                        <div class="document-preview">
+                                            ${getContentPreview(doc.content)}
+                                        </div>
+                                    </div>
+                                `).join('') :
+                                '<div class="no-documents">该类别暂无文档</div>'
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        classesGrid.innerHTML = html;
+    }
+
+    // 获取文档类型文本
+    function getDocumentTypeText(type) {
+        const typeMap = {
+            'RICH_TEXT': '富文本',
+            'MARKDOWN': 'Markdown'
+        };
+        return typeMap[type] || type;
+    }
+
+    // 获取内容预览
+    function getContentPreview(content) {
+        if (!content) return '无内容';
+
+        // 移除HTML标签
+        const cleanContent = content.replace(/<[^>]+>/g, '');
+
+        // 截取前100个字符
+        return cleanContent.length > 100 ?
+            cleanContent.substring(0, 100) + '...' : cleanContent;
+    }
+
+    // 打开文档
+    function openDocument(documentId) {
+        window.location.href = `edit-document.html?id=${documentId}`;
+    }
+
+    // 显示错误信息
+    function showError(message) {
+        const resultsContainer = document.getElementById('resultsContainer');
+        const classesGrid = document.getElementById('classesGrid');
+
+        resultsContainer.style.display = 'block';
+        classesGrid.innerHTML = `
+            <div class="error-message">
+                ${message}
+            </div>
+        `;
+        document.getElementById('resultsInfo').textContent = '分析出错';
+    }
+
+    // 返回上一页
+    function goBack() {
+        window.history.back();
+    }
+</script>
+</body>
+</html>

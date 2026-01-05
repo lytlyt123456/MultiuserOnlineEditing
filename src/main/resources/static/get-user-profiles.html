@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户信息管理 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/get-user-profiles-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>用户信息管理 - 管理员 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <button onclick="goBack()" class="btn">返回首页</button>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="search-container">
+                <h2>搜索用户信息</h2>
+                <p style="color: #666; margin-bottom: 1.5rem;">
+                    请输入用户名搜索用户详细信息
+                </p>
+
+                <form id="searchForm" class="search-form" onsubmit="return searchUser(event)">
+                    <input type="text" id="usernameInput"
+                           placeholder="输入用户名（例如：zhangsan）"
+                           required
+                           autocomplete="off">
+                    <button type="submit">搜索</button>
+                </form>
+
+                <div id="errorMessage" class="error-message" style="display: none;"></div>
+            </div>
+
+            <div id="userProfile" class="user-profile-container">
+                <!-- 用户信息将在这里动态显示 -->
+            </div>
+
+            <a href="dashboard.html" class="back-link">返回工作台</a>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script>
+    // 检查登录状态和权限
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+    });
+
+    // 搜索用户
+    async function searchUser(event) {
+        event.preventDefault();
+
+        const usernameInput = document.getElementById('usernameInput');
+        const username = usernameInput.value.trim();
+
+        if (!username) {
+            showError('请输入用户名');
+            return false;
+        }
+
+        // 清空之前的错误信息
+        clearError();
+
+        // 显示加载中
+        showLoading();
+
+        try {
+            const response = await user.getProfileByUsername(username);
+
+            if (response.success) {
+                displayUserProfile(response.data);
+            } else {
+                showError('获取用户信息失败：' + response.message);
+            }
+        } catch (error) {
+            console.error('搜索用户错误:', error);
+            showError('搜索失败：' + error.message);
+        }
+
+        return false;
+    }
+
+    // 显示加载中
+    function showLoading() {
+        const profileContainer = document.getElementById('userProfile');
+        profileContainer.innerHTML = `
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                正在加载用户信息...
+            </div>
+        `;
+        profileContainer.classList.add('active');
+    }
+
+    // 从文件路径中提取文件名
+    function getFileNameFromPath(path) {
+        if (!path) return '';
+        return path.split('/').pop().split('\\').pop();
+    }
+
+    // 显示用户信息
+    function displayUserProfile(userData) {
+        const profileContainer = document.getElementById('userProfile');
+
+        // 获取头像URL
+        const avatarFileName = getFileNameFromPath(userData.avatar_path);
+        let avatarUrl = '';
+        let avatarDisplay = '';
+
+        if (avatarFileName) {
+            let host = '';
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                host = 'http://localhost:8080';
+            } else {
+                host = `${window.location.protocol}//${window.location.host}`;
+            }
+            avatarUrl = `${host}/uploads/avatars/${avatarFileName}`;
+            avatarDisplay = `<img src="${avatarUrl}" alt="${userData.username}" class="avatar">`;
+        } else {
+            const initial = userData.username ? userData.username.charAt(0).toUpperCase() : '?';
+            avatarDisplay = `<div class="avatar-placeholder">${initial}</div>`;
+        }
+
+        // 格式化角色显示
+        const roleMap = {
+            'ADMIN': '管理员',
+            'EDITOR': '编辑者',
+            'VIEWER': '查看者'
+        };
+        const roleText = roleMap[userData.role] || userData.role;
+
+        // 格式化日期
+        const formatDate = (dateString) => {
+            if (!dateString) return '未知';
+            const date = new Date(dateString);
+            return date.toLocaleString('zh-CN');
+        };
+
+        // 构建HTML
+        const html = `
+            <div class="user-header">
+                <div class="avatar-container">
+                    ${avatarDisplay}
+                </div>
+                <div class="user-basic-info">
+                    <h2>${userData.full_name || userData.username}</h2>
+                    <div class="user-role">${roleText}</div>
+                </div>
+            </div>
+
+            <div class="user-details">
+                <div class="detail-group">
+                    <h3>基本信息</h3>
+                    <div class="detail-item">
+                        <span class="detail-label">用户ID：</span>
+                        <span class="detail-value">${userData.userId}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">用户名：</span>
+                        <span class="detail-value">${userData.username}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">电子邮箱：</span>
+                        <span class="detail-value">${userData.email || '未设置'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">手机号码：</span>
+                        <span class="detail-value">${userData.phone || '未设置'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">真实姓名：</span>
+                        <span class="detail-value">${userData.full_name || '未设置'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">用户角色：</span>
+                        <span class="detail-value">${roleText}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-group">
+                <h3>个人简介</h3>
+                ${userData.biography ?
+                    `<div class="bio-content">${userData.biography}</div>` :
+                    '<div class="no-bio bio-content">该用户还没有设置个人简介</div>'}
+            </div>
+        `;
+
+        profileContainer.innerHTML = html;
+        profileContainer.classList.add('active');
+    }
+
+    // 显示错误信息
+    function showError(message) {
+        const errorElement = document.getElementById('errorMessage');
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+
+        // 隐藏用户信息区域
+        document.getElementById('userProfile').classList.remove('active');
+    }
+
+    // 清除错误信息
+    function clearError() {
+        const errorElement = document.getElementById('errorMessage');
+        errorElement.textContent = '';
+        errorElement.style.display = 'none';
+    }
+
+    // 返回上一页
+    function goBack() {
+        window.history.back();
+    }
+
+    // 登出
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = 'login.html';
+    }
+</script>
+</body>
+</html>

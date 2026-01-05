@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的标签 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/my-tags-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>我的标签 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="dashboard.html" class="btn">返回工作台</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <!-- 操作按钮 -->
+            <div class="action-buttons">
+                <a href="create-tag.html" class="btn btn-primary">新建标签</a>
+            </div>
+
+            <!-- 搜索框 -->
+            <div class="search-box">
+                <form id="searchForm" onsubmit="return false;">
+                    <div class="search-form">
+                        <div class="form-group">
+                            <label for="searchKeyword">搜索标签</label>
+                            <input type="text" id="searchKeyword" placeholder="输入标签名称关键词进行搜索...">
+                            <div class="search-help">输入关键词搜索标签，留空显示所有标签</div>
+                        </div>
+                        <button type="button" onclick="searchTags()" class="btn btn-primary">搜索</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 标签列表 -->
+            <div id="tagsList">
+                <div class="loading">请搜索你的标签</div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let searchTimeout = null;
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+    });
+
+    // 加载标签
+    async function loadTags() {
+        const tagsList = document.getElementById('tagsList');
+        tagsList.innerHTML = '<div class="loading">加载中...</div>';
+
+        try {
+            const keyword = document.getElementById('searchKeyword').value.trim();
+            let response;
+
+            if (keyword) {
+                // 搜索标签
+                response = await tagAPI.searchTags(keyword);
+            } else {
+                // 获取所有标签
+                response = await tagAPI.getUserTags();
+            }
+
+            if (response.success) {
+                displayTags(response.data.tags || []);
+            } else {
+                tagsList.innerHTML = '<div class="empty-state">加载失败: ' + response.message + '</div>';
+            }
+        } catch (error) {
+            console.error('加载标签错误:', error);
+            tagsList.innerHTML = '<div class="empty-state">加载失败: ' + error.message + '</div>';
+        }
+    }
+
+    // 搜索标签
+    function searchTags() {
+        loadTags();
+    }
+
+    // 显示标签列表
+    function displayTags(tags) {
+        const tagsList = document.getElementById('tagsList');
+
+        if (tags.length === 0) {
+            tagsList.innerHTML = '<div class="empty-state">未搜索到任何标签</div>';
+            return;
+        }
+
+        let html = '<div class="tags-grid">';
+
+        tags.forEach(tag => {
+            html += `
+                <div class="tag-card">
+                    <div class="tag-header">
+                        <h3 class="tag-name">${escapeHtml(tag.name)}</h3>
+                    </div>
+                    <div class="tag-description">${tag.description ? escapeHtml(tag.description) : '<em>暂无描述</em>'}</div>
+                    <div class="tag-meta">
+                        创建时间: ${new Date(tag.created_at).toLocaleString()}
+                    </div>
+                    <div class="tag-actions">
+                        <button class="btn-edit" onclick="editTag(${tag.id})">编辑</button>
+                        <button class="btn-delete" onclick="deleteTag(${tag.id}, '${tag.name}')">删除</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        tagsList.innerHTML = html;
+    }
+
+    // 编辑标签
+    function editTag(tagId) {
+        window.location.href = `edit-tag.html?id=${tagId}`;
+    }
+
+    // 删除标签
+    async function deleteTag(tagId, tagName) {
+        if (!confirm(`确定要删除标签 "${tagName}" 吗？此操作不可撤销。`)) {
+            return;
+        }
+
+        try {
+            const response = await tagAPI.deleteTag(tagId);
+            if (response.success) {
+                alert('标签删除成功');
+                loadTags(); // 重新加载标签列表
+            } else {
+                alert('删除失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('删除标签错误:', error);
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    // HTML转义函数
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+</body>
+</html>

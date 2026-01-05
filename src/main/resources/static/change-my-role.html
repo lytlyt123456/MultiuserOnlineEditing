@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>申请升级角色 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/change-my-role-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>协作编辑系统 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">申请升级角色</span>
+                    <a href="dashboard.html" class="btn btn-secondary">返回工作台</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="role-container">
+                <div class="role-header">
+                    <h2>申请升级角色</h2>
+                    <p>从查看者升级为编辑者</p>
+                </div>
+
+                <div class="role-content">
+                    <div class="role-info">
+                        <h3>角色升级说明</h3>
+                        <p>作为查看者，您可以查看文档内容。升级为编辑者后，您将获得创建和编辑文档的权限。</p>
+                        <p>申请提交后需要管理员审核批准。</p>
+                    </div>
+
+                    <div class="role-comparison">
+                        <div class="role-card current">
+                            <h4>当前角色：查看者</h4>
+                            <ul class="permission-list">
+                                <li>查看文档内容</li>
+                                <li>查看操作日志</li>
+                            </ul>
+                        </div>
+
+                        <div class="role-card target">
+                            <h4>目标角色：编辑者</h4>
+                            <ul class="permission-list">
+                                <li>所有查看者权限</li>
+                                <li>创建新文档</li>
+                                <li>编辑现有文档</li>
+                                <li>参与协作编辑</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="currentRoleInfo">
+                        <!-- 当前角色信息将通过JavaScript动态填充 -->
+                    </div>
+
+                    <div class="form-actions">
+                        <button onclick="goBack()" class="btn btn-secondary">取消</button>
+                        <button onclick="requestUpgrade()" class="btn btn-primary" id="upgradeBtn">
+                            申请升级为编辑者
+                        </button>
+                    </div>
+                </div>
+
+                <div id="message" class="message"></div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script>
+    let currentUserRole = '';
+
+    // 页面加载时检查权限和当前角色
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        await loadUserRole();
+    });
+
+    // 加载用户角色信息
+    async function loadUserRole() {
+        try {
+            const response = await user.getProfile();
+            console.log('用户信息响应:', response);
+
+            if (response.success && response.data) {
+                const userData = response.data;
+                currentUserRole = userData.role;
+
+                displayRoleInfo(userData);
+
+                // 如果不是VIEWER，禁用申请按钮
+                if (currentUserRole !== 'VIEWER') {
+                    document.getElementById('upgradeBtn').disabled = true;
+                    if (currentUserRole === 'EDITOR') {
+                        document.getElementById('upgradeBtn').textContent = '您已是编辑者';
+                    } else if (currentUserRole === 'ADMIN') {
+                        document.getElementById('upgradeBtn').textContent = '您已是管理员';
+                    }
+                }
+            } else {
+                showMessage(response.message, 'error');
+            }
+        } catch (error) {
+            console.error('加载用户角色异常:', error);
+            showMessage('加载用户信息时发生错误', 'error');
+        }
+    }
+
+    // 显示角色信息
+    function displayRoleInfo(userData) {
+        const roleInfoEl = document.getElementById('currentRoleInfo');
+
+        let statusText = '';
+        let statusClass = '';
+
+        switch(userData.role) {
+            case 'VIEWER':
+                statusText = '您当前是查看者角色，可以申请升级为编辑者。';
+                statusClass = 'info';
+                break;
+            case 'EDITOR':
+                statusText = '您当前是编辑者角色，已拥有编辑权限。';
+                statusClass = 'success';
+                break;
+            case 'ADMIN':
+                statusText = '您当前是管理员角色，拥有系统管理权限。';
+                statusClass = 'warning';
+                break;
+            default:
+                statusText = '未知角色状态。';
+                statusClass = 'error';
+        }
+
+        roleInfoEl.innerHTML = `
+            <div class="message ${statusClass}">
+                <strong>当前状态：</strong>${statusText}
+            </div>
+        `;
+    }
+
+    // 申请升级角色
+    async function requestUpgrade() {
+        const upgradeBtn = document.getElementById('upgradeBtn');
+        const originalText = upgradeBtn.textContent;
+
+        try {
+            upgradeBtn.textContent = '提交申请中...';
+            upgradeBtn.disabled = true;
+
+            const response = await user.requestRoleUpgrade();
+            console.log('申请升级响应:', response);
+
+            if (response.success) {
+                showMessage('申请提交成功！请等待管理员审核。', 'success');
+                upgradeBtn.textContent = '已提交申请';
+                upgradeBtn.disabled = true;
+
+                // 更新本地角色状态
+                setTimeout(() => {
+                    loadUserRole();
+                }, 1000);
+            } else {
+                showMessage('申请失败: ' + (response.message || '未知错误'), 'error');
+                upgradeBtn.textContent = originalText;
+                upgradeBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error('申请升级异常:', error);
+            showMessage('申请过程中发生错误: ' + error.message, 'error');
+            upgradeBtn.textContent = originalText;
+            upgradeBtn.disabled = false;
+        }
+    }
+
+    // 返回
+    function goBack() {
+        window.location.href = 'dashboard.html';
+    }
+
+    // 显示消息
+    function showMessage(text, type) {
+        const messageEl = document.getElementById('message');
+        messageEl.textContent = text;
+        messageEl.className = `message ${type}`;
+        messageEl.style.display = 'block';
+
+        setTimeout(() => {
+            messageEl.style.display = 'none';
+        }, type === 'success' ? 5000 : 3000);
+    }
+</script>
+</body>
+</html>

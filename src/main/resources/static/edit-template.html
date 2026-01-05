@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑模板 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/edit-template-style.css">
+    <!-- 引入Quill富文本编辑器 -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <!-- 引入Markdown编辑器样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>编辑模板 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎，用户</span>
+                    <a href="my-templates.html" class="btn">返回模板列表</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="form-container">
+                <!-- 模板基本信息 -->
+                <div class="template-info" id="templateInfo">
+                    <div class="template-info-item">
+                        <strong>创建时间:</strong> <span id="createdAt">加载中...</span>
+                    </div>
+                    <div class="template-info-item">
+                        <strong>最后更新:</strong> <span id="updatedAt">加载中...</span>
+                    </div>
+                    <div class="template-info-item">
+                        <strong>当前状态:</strong> <span id="currentVisibility">加载中...</span>
+                    </div>
+                    <div class="template-info-item">
+                        <strong>文档类型:</strong> <span id="currentDocumentType">加载中...</span>
+                    </div>
+                </div>
+
+                <form id="editTemplateForm" onsubmit="return false;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="name">模板名称 *</label>
+                            <input type="text" id="name" placeholder="请输入模板名称" required maxlength="100">
+                            <div class="form-help">模板名称不能超过100个字符</div>
+                            <div class="character-count">
+                                <span id="nameCount">0</span>/100
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="category">模板分类 *</label>
+                            <select id="category" required>
+                                <option value="">请选择分类</option>
+                                <option value="BUSINESS">商务</option>
+                                <option value="TECHNICAL">技术</option>
+                                <option value="ACADEMIC">学术</option>
+                                <option value="PERSONAL">个人</option>
+                                <option value="MEETING">会议</option>
+                                <option value="REPORT">报告</option>
+                                <option value="PROPOSAL">提案</option>
+                                <option value="OTHER">其他</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">模板描述</label>
+                        <textarea id="description" placeholder="请输入模板描述（可选）" maxlength="500"></textarea>
+                        <div class="form-help">模板描述不能超过500个字符</div>
+                        <div class="character-count">
+                            <span id="descriptionCount">0</span>/500
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="editor-header">
+                            <label>模板内容 *</label>
+                            <span class="editor-type-badge" id="editorTypeBadge">加载中...</span>
+                        </div>
+
+                        <div class="editor-content">
+                            <!-- 富文本编辑器 -->
+                            <div class="editor-panel" id="richTextPanel">
+                                <div id="richTextEditor"></div>
+                            </div>
+
+                            <!-- Markdown编辑器 -->
+                            <div class="editor-panel" id="markdownPanel">
+                                <div class="split-layout">
+                                    <div>
+                                        <label style="font-size: 0.9rem; color: #666;">编辑区</label>
+                                        <textarea id="markdownEditor" placeholder="请输入Markdown内容..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.9rem; color: #666;">预览区</label>
+                                        <div id="markdownPreview" class="markdown-preview"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="isPublic">
+                            <label for="isPublic">设为公开模板</label>
+                        </div>
+                        <div class="form-help">公开模板可以被其他用户使用</div>
+                    </div>
+
+                    <!-- 隐藏的模板ID字段 -->
+                    <input type="hidden" id="templateId">
+
+                    <div class="action-buttons">
+                        <button type="button" onclick="updateTemplate()" class="btn btn-primary">保存修改</button>
+                        <button type="button" onclick="goBack()" class="btn btn-outline">取消</button>
+                    </div>
+                </form>
+
+                <!-- 危险操作区域 -->
+                <div class="danger-zone">
+                    <h3>危险操作</h3>
+                    <p>删除模板将永久移除该模板。此操作不可撤销。</p>
+                    <button type="button" onclick="deleteTemplate()" class="btn btn-delete">删除模板</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 引入Quill富文本编辑器 -->
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<!-- 引入Markdown编辑器 -->
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<!-- 引入Marked用于Markdown预览 -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let currentTemplateId = null;
+    let quill = null;
+    let easyMDE = null;
+    let currentDocumentType = '';
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 获取URL参数中的模板ID
+        const urlParams = new URLSearchParams(window.location.search);
+        currentTemplateId = urlParams.get('id');
+
+        if (!currentTemplateId) {
+            alert('无效的模板ID');
+            window.location.href = 'my-templates.html';
+            return;
+        }
+
+        // 设置隐藏字段
+        document.getElementById('templateId').value = currentTemplateId;
+
+        // 初始化编辑器
+        initializeEditors();
+        setupCharacterCounters();
+
+        // 加载模板详情
+        loadTemplateDetail(currentTemplateId);
+    });
+
+    // 初始化编辑器
+    function initializeEditors() {
+        // 初始化富文本编辑器
+        quill = new Quill('#richTextEditor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['link', 'image'],
+                    ['clean']
+                ]
+            },
+            placeholder: '请输入模板内容...'
+        });
+
+        // 初始化Markdown编辑器
+        easyMDE = new EasyMDE({
+            element: document.getElementById('markdownEditor'),
+            spellChecker: false,
+            autosave: {
+                enabled: false
+            },
+            placeholder: '请输入Markdown内容...',
+            toolbar: [
+                'bold', 'italic', 'heading', '|',
+                'code', 'quote', 'unordered-list', 'ordered-list', '|',
+                'link', 'image', '|',
+                'preview', 'side-by-side', 'fullscreen', '|',
+                'guide'
+            ]
+        });
+
+        // 监听Markdown内容变化，更新预览
+        easyMDE.codemirror.on('change', function() {
+            updateMarkdownPreview();
+        });
+    }
+
+    // 更新Markdown预览
+    function updateMarkdownPreview() {
+        const content = easyMDE.value();
+        const preview = document.getElementById('markdownPreview');
+        preview.innerHTML = marked.parse(content || '');
+    }
+
+    // 设置字符计数器
+    function setupCharacterCounters() {
+        const nameInput = document.getElementById('name');
+        const descriptionInput = document.getElementById('description');
+        const nameCount = document.getElementById('nameCount');
+        const descriptionCount = document.getElementById('descriptionCount');
+
+        nameInput.addEventListener('input', function() {
+            nameCount.textContent = this.value.length;
+        });
+
+        descriptionInput.addEventListener('input', function() {
+            descriptionCount.textContent = this.value.length;
+        });
+    }
+
+    // 加载模板详情
+    async function loadTemplateDetail(templateId) {
+        try {
+            const response = await templateAPI.getTemplateDetail(templateId);
+            if (response.success) {
+                const template = response.data.template;
+                populateForm(template);
+            } else {
+                alert('加载模板详情失败: ' + response.message);
+                window.location.href = 'my-templates.html';
+            }
+        } catch (error) {
+            console.error('加载模板详情错误:', error);
+            alert('加载模板详情失败: ' + error.message);
+            window.location.href = 'my-templates.html';
+        }
+    }
+
+    // 填充表单数据
+    function populateForm(template) {
+        // 保存文档类型
+        currentDocumentType = template.document_type || '';
+
+        // 填充表单字段
+        document.getElementById('name').value = template.name || '';
+        document.getElementById('description').value = template.description || '';
+        document.getElementById('category').value = template.category || '';
+        document.getElementById('isPublic').checked = template.is_public || false;
+
+        // 根据文档类型显示对应的编辑器
+        if (currentDocumentType === 'RICH_TEXT') {
+            quill.root.innerHTML = template.content || '';
+            document.getElementById('richTextPanel').classList.add('active');
+            document.getElementById('editorTypeBadge').textContent = '富文本';
+            document.getElementById('editorTypeBadge').style.background = '#007bff';
+        } else if (currentDocumentType === 'MARKDOWN') {
+            easyMDE.value(template.content || '');
+            updateMarkdownPreview();
+            document.getElementById('markdownPanel').classList.add('active');
+            document.getElementById('editorTypeBadge').textContent = 'Markdown';
+            document.getElementById('editorTypeBadge').style.background = '#28a745';
+        }
+
+        // 更新字符计数
+        document.getElementById('nameCount').textContent = template.name ? template.name.length : 0;
+        document.getElementById('descriptionCount').textContent = template.description ? template.description.length : 0;
+
+        // 更新模板信息显示
+        document.getElementById('createdAt').textContent = new Date(template.created_at).toLocaleString();
+        document.getElementById('updatedAt').textContent = new Date(template.updated_at).toLocaleString();
+        document.getElementById('currentVisibility').textContent = template.is_public ? '公开' : '私有';
+        document.getElementById('currentDocumentType').textContent = template.document_type === 'RICH_TEXT' ? '富文本' : 'Markdown';
+    }
+
+    // 更新模板
+    async function updateTemplate() {
+        const name = document.getElementById('name').value.trim();
+        const description = document.getElementById('description').value.trim();
+        const category = document.getElementById('category').value;
+        const isPublic = document.getElementById('isPublic').checked;
+        const templateId = document.getElementById('templateId').value;
+
+        if (!name) {
+            alert('请输入模板名称');
+            return;
+        }
+
+        if (!category) {
+            alert('请选择模板分类');
+            return;
+        }
+
+        let content = '';
+        if (currentDocumentType === 'RICH_TEXT') {
+            content = quill.root.innerHTML;
+        } else if (currentDocumentType === 'MARKDOWN') {
+            content = easyMDE.value();
+        }
+
+        if (!content) {
+            alert('请输入模板内容');
+            return;
+        }
+
+        if (name.length > 100) {
+            alert('模板名称不能超过100个字符');
+            return;
+        }
+
+        if (description.length > 500) {
+            alert('模板描述不能超过500个字符');
+            return;
+        }
+
+        try {
+            const updateData = {
+                name: name,
+                description: description || '',
+                content: content,
+                category: category,
+                isPublic: isPublic
+            };
+
+            const response = await templateAPI.updateTemplate(templateId, updateData);
+
+            if (response.success) {
+                alert('模板更新成功！');
+                window.location.href = 'my-templates.html';
+            } else {
+                alert('更新失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('更新模板错误:', error);
+            alert('更新失败: ' + error.message);
+        }
+    }
+
+    // 删除模板
+    async function deleteTemplate() {
+        const templateId = document.getElementById('templateId').value;
+        const templateName = document.getElementById('name').value;
+
+        if (!confirm(`确定要删除模板 "${templateName}" 吗？此操作不可撤销。`)) {
+            return;
+        }
+
+        try {
+            const response = await templateAPI.deleteTemplate(templateId);
+
+            if (response.success) {
+                alert('模板删除成功！');
+                // 返回到模板列表页面
+                window.location.href = 'my-templates.html';
+            } else {
+                alert('删除失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('删除模板错误:', error);
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    // 返回上一页
+    function goBack() {
+        window.history.back();
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>查看模板 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/view-template-style.css">
+    <!-- 引入Marked用于Markdown渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>查看模板 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="my-templates.html" class="btn">返回模板列表</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="template-container">
+                <!-- 模板头部信息 -->
+                <div class="template-header">
+                    <h1 class="template-title" id="templateTitle">加载中...</h1>
+
+                    <div class="template-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">分类</span>
+                            <span class="meta-value" id="templateCategory">加载中...</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">文档类型</span>
+                            <span class="meta-value" id="templateDocumentType">加载中...</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">可见性</span>
+                            <span class="meta-value" id="templateVisibility">加载中...</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">创建者</span>
+                            <span class="meta-value" id="templateOwner">加载中...</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">更新时间</span>
+                            <span class="meta-value" id="templateUpdatedAt">加载中...</span>
+                        </div>
+                    </div>
+
+                    <div class="template-description" id="templateDescription">
+                        加载中...
+                    </div>
+                </div>
+
+                <!-- 模板内容 -->
+                <div class="content-section">
+                    <div class="content-header">
+                        <h2 class="content-title">模板内容</h2>
+                        <div>
+                            <button onclick="copyTemplateContent()" class="btn btn-primary">复制内容</button>
+                            <span class="copy-success" id="copySuccess">内容已复制到剪贴板！</span>
+                        </div>
+                    </div>
+                    <div class="template-content">
+                        <div id="templateContent">加载中...</div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="action-buttons">
+                    <button onclick="goBack()" class="btn btn-outline">返回</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let currentTemplateId = null;
+    let templateContent = '';
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 获取URL参数中的模板ID
+        const urlParams = new URLSearchParams(window.location.search);
+        currentTemplateId = urlParams.get('id');
+
+        if (!currentTemplateId) {
+            alert('无效的模板ID');
+            window.location.href = 'my-templates.html';
+            return;
+        }
+
+        // 加载模板详情
+        await loadTemplateDetail(currentTemplateId);
+    });
+
+    // 加载模板详情
+    async function loadTemplateDetail(templateId) {
+        try {
+            const response = await templateAPI.getTemplateDetail(templateId);
+            if (response.success) {
+                const template = response.data.template;
+                displayTemplate(template);
+            } else {
+                alert('加载模板详情失败: ' + response.message);
+                window.location.href = 'my-templates.html';
+            }
+        } catch (error) {
+            console.error('加载模板详情错误:', error);
+            alert('加载模板详情失败: ' + error.message);
+            window.location.href = 'my-templates.html';
+        }
+    }
+
+    // 显示模板
+    function displayTemplate(template) {
+        // 更新基本信息
+        document.getElementById('templateTitle').textContent = template.name || '未命名模板';
+        document.getElementById('templateCategory').textContent = getCategoryText(template.category);
+        document.getElementById('templateDocumentType').textContent = template.document_type === 'RICH_TEXT' ? '富文本' : 'Markdown';
+        document.getElementById('templateVisibility').textContent = template.is_public ? '公开' : '私有';
+        document.getElementById('templateOwner').textContent = '用户 ' + (template.owner_id || '');
+        document.getElementById('templateUpdatedAt').textContent = new Date(template.updated_at).toLocaleString();
+
+        // 更新描述
+        const descriptionEl = document.getElementById('templateDescription');
+        if (template.description) {
+            descriptionEl.textContent = template.description;
+        } else {
+            descriptionEl.innerHTML = '<em>暂无描述</em>';
+        }
+
+        // 保存模板内容
+        templateContent = template.content || '';
+
+        // 根据文档类型显示内容
+        const contentEl = document.getElementById('templateContent');
+        if (template.document_type === 'RICH_TEXT') {
+            contentEl.className = 'rich-text-content';
+            contentEl.innerHTML = template.content || '<em>暂无内容</em>';
+        } else if (template.document_type === 'MARKDOWN') {
+            contentEl.className = 'markdown-content';
+            contentEl.innerHTML = marked.parse(template.content || '<em>暂无内容</em>');
+        }
+    }
+
+    // 复制模板内容
+    function copyTemplateContent() {
+        if (!templateContent) {
+            alert('模板内容为空');
+            return;
+        }
+
+        // 创建临时textarea元素
+        const textarea = document.createElement('textarea');
+        textarea.value = templateContent;
+        document.body.appendChild(textarea);
+        textarea.select();
+
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                // 显示复制成功提示
+                const copySuccess = document.getElementById('copySuccess');
+                copySuccess.style.display = 'inline-block';
+                setTimeout(() => {
+                    copySuccess.style.display = 'none';
+                }, 2000);
+            } else {
+                alert('复制失败，请手动复制内容');
+            }
+        } catch (err) {
+            console.error('复制失败:', err);
+            alert('复制失败，请手动复制内容');
+        }
+
+        document.body.removeChild(textarea);
+    }
+
+    // 获取分类文本
+    function getCategoryText(category) {
+        const categoryMap = {
+            'BUSINESS': '商务',
+            'TECHNICAL': '技术',
+            'ACADEMIC': '学术',
+            'PERSONAL': '个人',
+            'MEETING': '会议',
+            'REPORT': '报告',
+            'PROPOSAL': '提案',
+            'OTHER': '其他'
+        };
+        return categoryMap[category] || category;
+    }
+
+    // 返回上一页
+    function goBack() {
+        window.history.back();
+    }
+</script>
+</body>
+</html>

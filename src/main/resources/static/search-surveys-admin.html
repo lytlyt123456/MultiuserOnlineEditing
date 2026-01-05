@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>问卷高级搜索（管理员） - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/search-surveys-admin-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>问卷高级搜索 · 管理员</h1>
+                <div class="user-info">
+                    <button onclick="goBack()" class="btn">返回工作台</button>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="search-container">
+                <div class="search-header">
+                    <h1>问卷高级搜索</h1>
+                    <p>根据用户ID、用户名或Likert平均分档次搜索问卷</p>
+                </div>
+
+                <form id="searchForm" onsubmit="return false;">
+                    <div class="search-form">
+                        <div class="form-group">
+                            <label for="userId">用户ID</label>
+                            <input type="number" id="userId" placeholder="输入用户ID">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="username">用户名</label>
+                            <input type="text" id="username" placeholder="输入用户名">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="scoreLevel">Likert平均分档次</label>
+                            <select id="scoreLevel">
+                                <option value="">全部</option>
+                                <option value="1">1-2分（非常不满意）</option>
+                                <option value="2">2-3分（不太满意）</option>
+                                <option value="3">3-4分（一般满意）</option>
+                                <option value="4">4-5分（非常满意）</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="search-actions">
+                        <button type="button" onclick="searchSurveys()" class="btn-primary">搜索问卷</button>
+                        <button type="button" onclick="resetSearch()" class="btn-outline">重置条件</button>
+                        <button type="button" onclick="showAllSurveys()" class="btn-outline">显示所有问卷</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="loading" class="loading" style="display: none;">
+                <div class="loading-spinner"></div>
+                <p>正在搜索问卷...</p>
+            </div>
+
+            <div id="resultsContainer" class="results-container" style="display: none;">
+                <div class="results-header">
+                    <h2>搜索结果</h2>
+                    <div id="resultsCount" class="results-count">找到 0 份问卷</div>
+                </div>
+                <div id="surveyList" class="survey-list">
+                    <!-- 搜索结果将在这里动态生成 -->
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 问卷详情模态框 -->
+<div id="surveyModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>问卷详情</h3>
+            <span class="close" onclick="closeModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div id="modalContent">
+                <!-- 问卷详情将在这里动态生成 -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeModal()" class="btn btn-outline">关闭</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/survey.js"></script>
+
+<script>
+    let questions = null;
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        const questionsResponse = await surveyAPI.getSurveyQuestions();
+        if (!questionsResponse.success) {
+            throw new Error(questionsResponse.message);
+        }
+
+        questions = questionsResponse.data.questions;
+    });
+
+    async function searchSurveys() {
+        const userId = document.getElementById('userId').value;
+        const username = document.getElementById('username').value;
+        const scoreLevel = document.getElementById('scoreLevel').value;
+
+        // 显示加载中
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('resultsContainer').style.display = 'none';
+
+        try {
+            const response = await surveyAPI.searchSurveys(
+                userId ? parseInt(userId) : undefined,
+                username || undefined,
+                scoreLevel ? parseInt(scoreLevel) : undefined
+            );
+
+            if (response.success) {
+                displaySearchResults(response.data.surveys);
+            } else {
+                alert('搜索失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('搜索问卷错误:', error);
+            alert('搜索失败: ' + error.message);
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    async function showAllSurveys() {
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('resultsContainer').style.display = 'none';
+
+        try {
+            const response = await surveyAPI.getAllSurveys();
+            if (response.success) {
+                displaySearchResults(response.data.surveys);
+            } else {
+                alert('获取问卷失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('获取问卷错误:', error);
+            alert('获取失败: ' + error.message);
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    function displaySearchResults(surveys) {
+        const resultsContainer = document.getElementById('resultsContainer');
+        const surveyList = document.getElementById('surveyList');
+        const resultsCount = document.getElementById('resultsCount');
+
+        if (!surveys || surveys.length === 0) {
+            surveyList.innerHTML = `
+                <div class="no-results">
+                    <p>没有找到符合条件的问卷</p>
+                </div>
+            `;
+            resultsCount.textContent = '找到 0 份问卷';
+            resultsContainer.style.display = 'block';
+            return;
+        }
+
+        resultsCount.textContent = `找到 ${surveys.length} 份问卷`;
+
+        let html = '';
+        surveys.forEach((survey, index) => {
+            const user = survey.user || {};
+            const averageScore = survey.averageLikertScore || survey.calculateAverageLikertScore?.() || 0;
+            const createdAt = new Date(survey.createdAt).toLocaleString();
+
+            html += `
+                <div class="survey-item" onclick="showSurveyDetail(${index})">
+                    <div class="survey-header">
+                        <div class="survey-user">${user.username || '未知用户'}</div>
+                        <div class="survey-score">平均分: ${averageScore.toFixed(1)}</div>
+                    </div>
+                    <div class="survey-meta">
+                        <div>用户ID: ${user.id || 'N/A'}</div>
+                        <div>邮箱: ${user.email || 'N/A'}</div>
+                        <div>提交时间: ${createdAt}</div>
+                    </div>
+                    <div class="survey-details" style="display: none;" id="details_${index}">
+                        <div class="survey-questions" id="questions_${index}">
+                            <!-- 问题详情将在点击时加载 -->
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        surveyList.innerHTML = html;
+        resultsContainer.style.display = 'block';
+        window.currentSurveys = surveys;
+    }
+
+    async function showSurveyDetail(index) {
+        const survey = window.currentSurveys[index];
+        const modal = document.getElementById('surveyModal');
+        const modalContent = document.getElementById('modalContent');
+
+        // 显示加载中
+        modalContent.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <div class="loading-spinner"></div>
+                <p>加载问卷详情...</p>
+            </div>
+        `;
+        modal.style.display = 'flex';
+
+        try {
+            // 获取问卷详情（包含答案）
+            const user = survey.user || {};
+            const averageScore = survey.averageLikertScore || survey.calculateAverageLikertScore?.() || 0;
+            const createdAt = new Date(survey.createdAt).toLocaleString();
+
+            let detailHtml = `
+                <div class="survey-header" style="margin-bottom: 1.5rem;">
+                    <h4>用户信息</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                        <div>
+                            <strong>用户名:</strong> ${user.username || '未知用户'}
+                        </div>
+                        <div>
+                            <strong>用户ID:</strong> ${user.id || 'N/A'}
+                        </div>
+                        <div>
+                            <strong>邮箱:</strong> ${user.email || 'N/A'}
+                        </div>
+                        <div>
+                            <strong>角色:</strong> ${user.role || 'N/A'}
+                        </div>
+                        <div>
+                            <strong>提交时间:</strong> ${createdAt}
+                        </div>
+                        <div>
+                            <strong>Likert平均分:</strong> <span style="color: #007bff; font-weight: bold;">${averageScore.toFixed(1)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="survey-questions">
+            `;
+
+            // 显示所有问题和答案
+            if (survey.answers && survey.answers.length > 0) {
+                // 按问题索引排序
+                survey.answers.sort((a, b) => a.questionIndex - b.questionIndex);
+
+                survey.answers.forEach((answer, idx) => {
+                    const questionIndex = answer.questionIndex;
+                    const questionType = answer.likertAnswer !== null ? '五点量表' : '文字回答';
+
+                    detailHtml += `
+                        <div class="question-item">
+                            <div class="question-header">
+                                <div class="question-index">问题 ${questionIndex + 1}</div>
+                                <div class="question-type">${questionType}</div>
+                            </div>
+                            <div class="question-content">
+                                ${questions[questionIndex]?.content || '问题内容未找到'}
+                            </div>
+                            <div class="answer-content">
+                    `;
+
+                    if (answer.likertAnswer !== null) {
+                        detailHtml += `
+                            <div class="answer-likert">
+                                <span class="score-badge">${answer.likertAnswer}分</span>
+                                <span class="score-description">${getLikertDescription(answer.likertAnswer)}</span>
+                            </div>
+                        `;
+                    } else {
+                        detailHtml += `
+                            <div class="answer-text">${answer.textAnswer || '无回答'}</div>
+                        `;
+                    }
+
+                    detailHtml += `
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                detailHtml += `
+                    <div class="no-results">
+                        <p>该问卷暂无答案数据</p>
+                    </div>
+                `;
+            }
+
+            detailHtml += `</div>`;
+            modalContent.innerHTML = detailHtml;
+
+        } catch (error) {
+            console.error('加载问卷详情错误:', error);
+            modalContent.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: #dc3545;">
+                    <p>加载问卷详情失败: ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    function getLikertDescription(score) {
+        const descriptions = {
+            1: '非常不满意',
+            2: '不太满意',
+            3: '一般',
+            4: '比较满意',
+            5: '非常满意'
+        };
+        return descriptions[score] || '';
+    }
+
+    function resetSearch() {
+        document.getElementById('userId').value = '';
+        document.getElementById('username').value = '';
+        document.getElementById('scoreLevel').value = '';
+        document.getElementById('resultsContainer').style.display = 'none';
+    }
+
+    function closeModal() {
+        document.getElementById('surveyModal').style.display = 'none';
+    }
+
+    function goBack() {
+        window.location.href = 'dashboard.html';
+    }
+
+    // 点击模态框外部关闭
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('surveyModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+</script>
+</body>
+</html>

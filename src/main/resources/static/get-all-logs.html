@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员操作日志 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/get-all-logs-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>协作编辑系统 - 管理员 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">操作日志管理</span>
+                    <a href="dashboard.html" class="btn btn-secondary">返回工作台</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="logs-container">
+                <div class="logs-header">
+                    <h2>管理员操作日志</h2>
+                    <p>查看所有用户的操作记录</p>
+                </div>
+
+                <div class="logs-content">
+                    <!-- 搜索区域 -->
+                    <div class="search-section">
+                        <h3 style="margin-bottom: 1rem; color: #495057;">用户搜索</h3>
+                        <div class="search-form">
+                            <div class="form-group">
+                                <label for="userIdInput">搜索用户ID</label>
+                                <input type="number" id="userIdInput" placeholder="输入用户ID进行搜索"
+                                       class="form-control" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="userSearch">搜索用户名</label>
+                                <input type="text" id="userSearch" placeholder="输入用户名进行搜索"
+                                       class="form-control">
+                                <div class="user-selection" id="userSelection"></div>
+                            </div>
+                            <button type="button" onclick="searchUserLogs()" class="btn btn-primary">
+                                🔍 搜索日志
+                            </button>
+                            <button type="button" onclick="clearSearch()" class="btn btn-outline">
+                                🗑️ 清除搜索
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="logs-actions">
+                        <div class="logs-count">
+                            共 <span id="totalLogs">0</span> 条记录
+                        </div>
+                    </div>
+
+                    <div id="logsTableContainer">
+                        <div class="loading-state" id="loadingState">
+                            <div class="icon">⏳</div>
+                            <p>正在加载操作日志...</p>
+                        </div>
+
+                        <table class="logs-table" id="logsTable" style="display: none;">
+                            <thead>
+                            <tr>
+                                <th>操作时间</th>
+                                <th>用户ID</th>
+                                <th>用户名</th>
+                                <th>操作类型</th>
+                                <th>资源类型</th>
+                                <th>资源ID</th>
+                                <th>操作详情</th>
+                            </tr>
+                            </thead>
+                            <tbody id="logsTableBody">
+                            <!-- 日志数据将通过JavaScript动态填充 -->
+                            </tbody>
+                        </table>
+
+                        <div class="empty-state" id="emptyState" style="display: none;">
+                            <div class="icon">📝</div>
+                            <h3>暂无操作记录</h3>
+                            <p id="emptyStateMessage">请搜索用户查看操作日志</p>
+                        </div>
+                    </div>
+
+                    <div class="pagination" id="pagination" style="display: none;">
+                        <!-- 分页控件将通过JavaScript动态生成 -->
+                    </div>
+                </div>
+
+                <div id="message" class="message"></div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script>
+    let currentLogs = [];
+    let currentUserId = null;
+    const logsPerPage = 10;
+    let currentPage = 1;
+
+    // 页面加载时检查权限并初始化
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        // 检查用户是否为管理员
+        await checkAdminPermission();
+        setupEventListeners();
+    });
+
+    // 检查管理员权限
+    async function checkAdminPermission() {
+        try {
+            const response = await user.getProfile();
+            console.log('获取用户资料响应:', response);
+            const userData = response.data;
+
+            const userRole = userData.role || '';
+
+            if (!userRole.includes('ADMIN')) {
+                showMessage('权限不足：只有管理员可以访问此页面', 'error');
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 2000);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('检查权限异常:', error);
+            showMessage('检查权限时发生错误', 'error');
+            return false;
+        }
+    }
+
+    // 设置事件监听器
+    function setupEventListeners() {
+        // 用户搜索输入监听
+        document.getElementById('userSearch').addEventListener('input', function(e) {
+            // 这里可以实现用户搜索功能，由于没有用户列表API，暂时留空
+            // 实际项目中可以调用用户搜索API
+        });
+
+        // 用户ID输入监听
+        document.getElementById('userIdInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchUserLogs();
+            }
+        });
+
+        document.getElementById('userSearch').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchUserLogs();
+            }
+        });
+    }
+
+    // 搜索用户日志
+    async function searchUserLogs() {
+        const userSearch = document.getElementById('userSearch').value.trim();
+        const userIdInput = document.getElementById('userIdInput').value.trim();
+
+        if (!userSearch && !userIdInput) {
+            showMessage('请输入用户ID或用户名', 'error');
+            return;
+        }
+
+        else if (userSearch) {
+            try {
+                const response = await user.getProfileByUsername(userSearch);
+                console.log('用户资料响应:', response);
+
+                if (response.success && response.data) {
+                    userData = response.data;
+                    const userId = parseInt(userData.userId);
+                    if (isNaN(userId) || userId <= 0) {
+                        showMessage('请输入有效的用户ID', 'error');
+                        return;
+                    }
+
+                    await loadUserLogs(userId);
+                } else {
+                    showMessage(response.message, 'error');
+                    showEmptyState();
+                }
+            }  catch (error) {
+                showMessage(error.message, 'error');
+                showEmptyState();
+            }
+        }
+
+        else {
+            const userId = parseInt(userIdInput);
+            if (isNaN(userId) || userId <= 0) {
+                showMessage('请输入有效的用户ID', 'error');
+                return;
+            }
+
+            await loadUserLogs(userId);
+        }
+    }
+
+    // 加载指定用户的操作日志
+    async function loadUserLogs(userId) {
+        try {
+            showLoadingState();
+
+            const response = await user.getAllOperationLogs(userId);
+            console.log('用户操作日志响应:', response);
+
+            if (response.success && response.data) {
+                // 直接使用response.data，因为现在返回的是数组
+                currentLogs = Array.isArray(response.data) ? response.data : [];
+                console.log('解析后的日志数据:', currentLogs);
+
+                displayLogs(currentLogs);
+                updateLogsCount(currentLogs.length);
+
+                if (currentLogs.length === 0) {
+                    showEmptyState();
+                } else {
+                    showLogsTable();
+                    setupPagination(currentLogs.length);
+                }
+
+                showMessage('操作日志加载成功', 'success');
+            } else {
+                showMessage('加载操作日志失败: ' + (response.message || '未知错误'), 'error');
+                showEmptyState('加载日志失败');
+            }
+        } catch (error) {
+            console.error('加载操作日志异常:', error);
+            showMessage('加载操作日志时发生错误: ' + error.message, 'error');
+            showEmptyState('加载日志时发生错误');
+        }
+    }
+
+    // 显示日志数据
+    function displayLogs(logs) {
+        const tableBody = document.getElementById('logsTableBody');
+        tableBody.innerHTML = '';
+
+        // 计算分页
+        const startIndex = (currentPage - 1) * logsPerPage;
+        const endIndex = Math.min(startIndex + logsPerPage, logs.length);
+        const pageLogs = logs.slice(startIndex, endIndex);
+
+        if (pageLogs.length === 0) {
+            showEmptyState();
+            return;
+        }
+
+        pageLogs.forEach(log => {
+            const row = document.createElement('tr');
+
+            // 格式化操作时间
+            let operationTime = '-';
+            if (log.operationTime) {
+                try {
+                    if (typeof log.operationTime === 'string') {
+                        operationTime = new Date(log.operationTime).toLocaleString('zh-CN');
+                    } else if (log.operationTime instanceof Array) {
+                        operationTime = new Date(...log.operationTime).toLocaleString('zh-CN');
+                    }
+                } catch (e) {
+                    console.warn('时间格式化错误:', e);
+                    operationTime = String(log.operationTime);
+                }
+            }
+
+            // 根据操作类型设置样式
+            const operationClass = getOperationClass(log.operation);
+
+            row.innerHTML = `
+                <td>${operationTime}</td>
+                <td><span class="user-info-badge">${log.userId}</span></td>
+                <td>${log.username || '-'}</td>
+                <td><span class="operation-type ${operationClass}">${log.operation}</span></td>
+                <td>${log.resourceType || '-'}</td>
+                <td>${log.resourceId || '-'}</td>
+                <td>${log.details || '-'}</td>
+            `;
+
+            tableBody.appendChild(row);
+        });
+    }
+
+    // 清除搜索
+    function clearSearch() {
+        document.getElementById('userIdInput').value = '';
+        document.getElementById('userSearch').value = '';
+        currentLogs = [];
+        currentUserId = null;
+     
+        document.getElementById('totalLogs').textContent = '0';
+
+        showEmptyState('请搜索用户查看操作日志');
+        showMessage('搜索已清除', 'info');
+    }
+
+    // 显示加载状态
+    function showLoadingState() {
+        document.getElementById('loadingState').style.display = 'block';
+        document.getElementById('logsTable').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('pagination').style.display = 'none';
+    }
+
+    // 显示空状态
+    function showEmptyState(message = '暂无操作记录') {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('logsTable').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('pagination').style.display = 'none';
+        document.getElementById('emptyStateMessage').textContent = message;
+    }
+
+    // 显示日志表格
+    function showLogsTable() {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('logsTable').style.display = 'table';
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('pagination').style.display = 'flex';
+    }
+
+    // 获取操作类型的CSS类
+    function getOperationClass(operation) {
+        const operationMap = {
+            'USER_LOGIN': 'operation-login',
+            'USER_REGISTER': 'operation-register',
+            'UPDATE_PROFILE': 'operation-update',
+            'UPLOAD_AVATAR': 'operation-upload',
+            'RESET_PASSWORD': 'operation-reset',
+            'CHANGE_ROLE': 'operation-change-role'
+        };
+        return operationMap[operation] || 'operation-update';
+    }
+
+    // 更新日志数量显示
+    function updateLogsCount(count) {
+        document.getElementById('totalLogs').textContent = count;
+    }
+
+    // 设置分页
+    function setupPagination(totalLogs) {
+        const totalPages = Math.ceil(totalLogs / logsPerPage);
+        const pagination = document.getElementById('pagination');
+
+        if (totalPages <= 1) {
+            pagination.style.display = 'none';
+            return;
+        }
+
+        let paginationHTML = '';
+
+        // 上一页按钮
+        if (currentPage > 1) {
+            paginationHTML += `<button onclick="changePage(${currentPage - 1})" class="btn btn-outline">上一页</button>`;
+        }
+
+        // 页码按钮
+        for (let i = Math.max(1, currentPage - 5); i <= Math.min(totalPages, currentPage + 5); i++) {
+            if (i === currentPage) {
+                paginationHTML += `<button class="btn btn-primary" disabled>${i}</button>`;
+            } else {
+                paginationHTML += `<button onclick="changePage(${i})" class="btn btn-outline">${i}</button>`;
+            }
+        }
+
+        // 下一页按钮
+        if (currentPage < totalPages) {
+            paginationHTML += `<button onclick="changePage(${currentPage + 1})" class="btn btn-outline">下一页</button>`;
+        }
+
+        pagination.innerHTML = paginationHTML;
+        pagination.style.display = 'flex';
+    }
+
+    // 切换页码
+    function changePage(page) {
+        currentPage = page;
+        displayLogs(currentLogs);
+        setupPagination(currentLogs.length);
+        document.getElementById('logsTable').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // 刷新日志
+    async function refreshLogs() {
+        if (currentUserId) {
+            currentPage = 1;
+            await loadUserLogs(currentUserId);
+        } else {
+            showMessage('请先搜索用户', 'info');
+        }
+    }
+
+    // 显示消息
+    function showMessage(text, type) {
+        const messageEl = document.getElementById('message');
+        messageEl.textContent = text;
+        messageEl.className = `message ${type}`;
+        messageEl.style.display = 'block';
+
+        setTimeout(() => {
+            messageEl.style.display = 'none';
+        }, type === 'success' ? 3000 : 5000);
+    }
+</script>
+</body>
+</html>

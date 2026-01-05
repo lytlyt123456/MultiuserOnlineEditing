@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作台 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/dashboard-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>协作编辑系统 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎，用户</span>
+
+                    <!-- 新增：通知和任务入口 -->
+                    <div class="dashboard-toolbar">
+                        <button class="dashboard-btn" onclick="toggleNotificationPanel()" id="notificationBtn">
+                            🔔 通知 <span id="unreadCountBadge" class="badge" style="display: none;">0</span>
+                        </button>
+                        <button class="dashboard-btn" onclick="toggleDashboardTaskPanel()" id="dashboardTaskBtn">
+                            📋 我的任务 <span id="taskCountBadge" class="badge" style="display: none;">0</span>
+                        </button>
+                    </div>
+
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <div class="card">
+                <h3>个人信息</h3>
+                <div id="userProfile">
+                    <p>用户名: <span id="profileUsername">加载中...</span></p>
+                    <p>邮箱: <span id="profileEmail">加载中...</span></p>
+                    <p>手机号: <span id="profilePhone">加载中...</span></p>
+                    <p>角色: <span id="profileRole">加载中...</span></p>
+                    <p>姓名: <span id="profileFullName">未设置</span></p>
+                    <p>个人简介: <span id="profileBio">未设置</span></p>
+                </div>
+                <div class="action-buttons">
+                    <a href="edit-profile.html" class="btn btn-primary">编辑资料</a>
+                </div>
+            </div>
+
+            <!-- 用户满意度调查入口 -->
+            <div class="card">
+                <h3>用户满意度调查</h3>
+                <div id="surveySection">
+                    <p>加载调查资格信息...</p>
+                </div>
+                <div id="surveyActions" style="display: none;">
+                    <!-- 资格检查通过后显示 -->
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>最近操作</h3>
+                <div id="recentActivities">
+                    <p>操作日志</p>
+                </div>
+                <div class="action-buttons" style="margin-top: 1rem;">
+                    <a href="get-logs.html" class="btn btn-primary">查看完整操作日志</a>
+                </div>
+            </div>
+
+            <div class="card" id="adminSection" style="display: none;">
+                <h3>管理员功能</h3>
+                <div class="action-buttons">
+                    <a href="get-all-logs.html" class="btn btn-primary">查看所有用户日志</a>
+                    <a href="change-user-role.html" class="btn btn-primary">用户角色管理</a>
+                    <a href="get-user-profiles.html" class="btn btn-primary">用户管理</a>
+
+                    <!-- 问卷管理功能 -->
+                    <a href="search-surveys-admin.html" class="btn btn-primary">问卷高级搜索</a>
+                    <a href="get-survey-score-distribution.html" class="btn btn-primary">问卷评分分布</a>
+                </div>
+            </div>
+
+            <!-- 对于VIEWER用户显示升级申请入口 -->
+            <div class="card" id="viewerUpgradeSection" style="display: none;">
+                <h3>角色升级</h3>
+                <p>您当前是查看者角色，可以申请升级为编辑者以获得更多权限。</p>
+                <div class="action-buttons">
+                    <a href="change-my-role.html" class="btn btn-primary">申请升级角色</a>
+                </div>
+            </div>
+
+            <!-- 文档管理入口 -->
+            <div class="card">
+                <h3>文档管理</h3>
+                <div class="action-buttons">
+                    <a href="my-documents.html" class="btn btn-primary">我的文档</a>
+                    <a href="search-my-documents.html" class="btn btn-primary">搜索我的文档</a>
+                    <a href="search-collaborate-documents.html" class="btn btn-primary">搜索协作的文档</a>
+                    <a href="search-documents-ai.html" class="btn btn-primary">智能搜索文档</a>
+                    <a href="documents-classification-ai.html" class="btn btn-primary">文档智能归类</a>
+                    <a href="my-tags.html" class="btn btn-primary">我的文档标签</a>
+                    <a href="my-templates.html" class="btn btn-primary">我的模板</a>
+                    <a href="recycle-bin.html" class="btn btn-primary">回收站</a>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/collaboration.js"></script>
+<script src="js/managers/dashboard-tasks.js"></script>
+<script src="js/managers/notification.js"></script>
+<script src="js/survey.js"></script>
+
+<!-- 新增：引入WebSocket相关库 -->
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+<script>
+    // 新增：协作管理器
+    let notificationManager = null;
+    let dashboardTaskManager = null;
+
+    // 页面加载时检查登录状态并加载用户信息
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+
+        collaborationSocket.connect();
+
+        loadUserInfo();
+
+        // 新增：初始化通知管理器
+        initializeDashboardNotificationManager();
+
+        // 新增：初始化任务管理器
+        initializeDashboardTaskManager();
+
+        // 新增：检查调查资格
+        checkSurveyEligibility();
+    });
+
+    // 新增：检查调查资格
+    async function checkSurveyEligibility() {
+        try {
+            const response = await surveyAPI.checkEligibility();
+            if (response.success) {
+                updateSurveySection(response.data);
+            } else {
+                document.getElementById('surveySection').innerHTML =
+                    '<p class="survey-message">无法检查调查资格: ' + response.message + '</p>';
+            }
+        } catch (error) {
+            console.error('检查调查资格错误:', error);
+            document.getElementById('surveySection').innerHTML =
+                '<p class="survey-message">检查调查资格时发生错误</p>';
+        }
+    }
+
+    // 新增：更新调查部分显示
+    function updateSurveySection(data) {
+        const surveySection = document.getElementById('surveySection');
+        const surveyActions = document.getElementById('surveyActions');
+
+        if (data.eligible) {
+            // 用户有资格填写问卷
+            surveySection.innerHTML = `
+                <p class="survey-message">
+                    ✅ 您有资格填写用户满意度调查问卷
+                    <span class="survey-status status-eligible">有资格</span>
+                </p>
+                <p class="survey-message">
+                    要求：编辑者角色且操作日志不少于100条
+                </p>
+            `;
+
+            surveyActions.innerHTML = `
+                <div class="survey-buttons">
+                    <a href="answer-survey.html" class="btn-survey">填写问卷</a>
+                </div>
+            `;
+            surveyActions.style.display = 'block';
+        } else {
+            // 用户没有资格
+            surveySection.innerHTML = `
+                <p class="survey-message">
+                    ❌ 您当前没有资格填写用户满意度调查问卷
+                    <span class="survey-status status-not-eligible">无资格</span>
+                </p>
+                <p class="survey-message">
+                    要求：必须是编辑者角色且操作日志不少于100条
+                </p>
+            `;
+            surveyActions.style.display = 'none';
+        }
+    }
+
+    // 初始化Dashboard通知管理器
+    async function initializeDashboardNotificationManager() {
+        const response = await user.getProfile();
+        const currentUserId = response.data.userId;
+
+        collaborationSocket.subscribe(`/topic/user/${currentUserId}/queue/notifications`, (message) => {
+            notificationManager.handleNewNotification(message);
+        });
+
+        notificationManager = new NotificationManager();
+        await notificationManager.initialize();
+
+        window.notificationManager = notificationManager;
+    }
+
+    // 初始化Dashboard任务管理器
+    async function initializeDashboardTaskManager() {
+        dashboardTaskManager = new DashboardTaskManager();
+        await dashboardTaskManager.initialize();
+
+        // 设置全局引用
+        window.dashboardTaskManager = dashboardTaskManager;
+    }
+
+    // 切换Dashboard通知面板
+    function toggleNotificationPanel() {
+        const panel = document.getElementById('notificationPanel');
+        if (panel) {
+            panel.classList.toggle('active');
+        }
+    }
+
+    async function markAsRead(notificationId) {
+        if (notificationManager) {
+            await notificationManager.markAsRead(notificationId);
+        }
+    }
+
+    async function markAllAsRead() {
+        if (notificationManager) {
+            await notificationManager.markAllAsRead();
+        }
+    }
+
+    async function deleteNotification(notificationId) {
+        if (notificationManager) {
+            await notificationManager.deleteNotification(notificationId);
+        }
+    }
+
+    function checkAdminPermission(userData) { // 如果用户没有管理员权限，就不显示adminSection卡片
+        const adminSection = document.getElementById('adminSection');
+        if (userData.role === 'ROLE_ADMIN' || userData.role === 'ADMIN') {
+            adminSection.style.display = 'block';
+        } else {
+            adminSection.style.display = 'none';
+        }
+    }
+
+    // 在loadUserInfo函数中检查角色并显示相应入口
+    function checkRoleSections(userData) {
+        const viewerSection = document.getElementById('viewerUpgradeSection');
+        if (userData.role === 'VIEWER' || userData.role === 'ROLE_VIEWER') {
+            viewerSection.style.display = 'block';
+        } else {
+            viewerSection.style.display = 'none';
+        }
+    }
+
+    async function loadUserInfo() {
+        try {
+            // 先从本地存储显示基本信息（快速显示）
+            const localUserData = JSON.parse(localStorage.getItem('user') || '{}');
+            if (localUserData.username) {
+                document.getElementById('userWelcome').textContent = `欢迎，${localUserData.username}`;
+                document.getElementById('profileUsername').textContent = localUserData.username;
+                document.getElementById('profileEmail').textContent = localUserData.email || '未设置';
+                document.getElementById('profileRole').textContent = localUserData.role ? localUserData.role.replace('ROLE_', '') : '查看者';
+            }
+
+            // 从API获取完整的用户信息
+            const response = await user.getProfile();
+            console.log('获取用户资料响应:', response);
+
+            if (response.success && response.data) {
+                const userData = response.data;
+
+                // 更新本地存储的用户数据
+                const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+                const updatedUser = {
+                    ...currentUser,
+                    ...userData
+                };
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+
+                // 更新页面显示
+                document.getElementById('userWelcome').textContent = `欢迎，${userData.username}`;
+                document.getElementById('profileUsername').textContent = userData.username;
+                document.getElementById('profileEmail').textContent = userData.email || '未设置';
+                document.getElementById('profileRole').textContent = userData.role ? userData.role.replace('ROLE_', '') : 'VIEWER';
+                document.getElementById('profileFullName').textContent = userData.full_name || '未设置';
+                document.getElementById('profilePhone').textContent = userData.phone || '未设置';
+                document.getElementById('profileBio').textContent = userData.biography || '未设置';
+                checkAdminPermission(userData);
+                checkRoleSections(userData);
+
+                console.log('用户资料更新完成:', userData);
+            } else {
+                console.error('获取用户资料失败:', response.message);
+                showErrorMessage('获取用户信息失败: ' + (response.message || '请检查网络连接'));
+            }
+        } catch (error) {
+            console.error('加载用户信息异常:', error);
+            showErrorMessage('加载用户信息时发生错误: ' + error.message);
+
+            // 如果API调用失败，至少显示本地存储的基本信息
+            const localUserData = JSON.parse(localStorage.getItem('user') || '{}');
+            if (localUserData.username) {
+                document.getElementById('profileFullName').textContent = '加载失败';
+                document.getElementById('profilePhone').textContent = '加载失败';
+                document.getElementById('profileBio').textContent = '加载失败';
+            }
+        }
+    }
+
+    // 添加错误显示函数
+    function showErrorMessage(message) {
+        // 可以在页面上添加一个错误提示区域，或者使用console.log
+        console.error('用户信息加载错误:', message);
+
+        // 在页面上显示错误提示
+        const errorDiv = document.getElementById('errorMessage') || createErrorMessageElement();
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    }
+
+    // 创建错误消息元素（如果不存在）
+    function createErrorMessageElement() {
+        const errorDiv = document.createElement('div');
+        errorDiv.id = 'errorMessage';
+        errorDiv.className = 'message error';
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.top = '20px';
+        errorDiv.style.right = '20px';
+        errorDiv.style.zIndex = '1000';
+        errorDiv.style.display = 'none';
+        document.body.appendChild(errorDiv);
+        return errorDiv;
+    }
+
+</script>
+</body>
+</html>

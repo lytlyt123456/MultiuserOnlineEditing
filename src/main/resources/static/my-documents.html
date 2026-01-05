@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的文档 - 协作编辑系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/my-documents-style.css">
+</head>
+<body>
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="dashboard-nav">
+                <h1>我的文档 ·</h1>
+                <div class="user-info">
+                    <span id="userWelcome">欢迎</span>
+                    <a href="dashboard.html" class="btn">返回工作台</a>
+                    <button onclick="logout()" class="btn">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <!-- 面包屑导航 -->
+            <div class="breadcrumb" id="breadcrumb">
+                <a href="#" onclick="loadRoot()">根目录</a>
+            </div>
+
+            <!-- 当前文件夹信息 -->
+            <div class="current-folder-info" id="currentFolderInfo" style="display: none;">
+                <h3 id="currentFolderName"></h3>
+                <p id="currentFolderDescription"></p>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="action-buttons">
+                <button onclick="createDocument()" class="btn btn-primary">新建文档</button>
+                <button onclick="createFolder()" class="btn btn-outline">新建文件夹</button>
+            </div>
+
+            <!-- 文件列表 -->
+            <div id="fileList">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/user.js"></script>
+<script src="js/document.js"></script>
+<script>
+    let currentFolderId = null;
+    let currentFolder = null;
+    let breadcrumbStack = [];
+
+    // 页面加载时检查登录状态并加载根目录
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!checkAuth()) {
+            return;
+        }
+        loadRoot();
+    });
+
+    // 加载根目录
+    async function loadRoot() {
+        currentFolderId = null;
+        currentFolder = null;
+        breadcrumbStack = [];
+
+        const breadcrumb = document.getElementById('breadcrumb');
+        breadcrumb.innerHTML = '';
+
+        hideFolderInfo();
+
+        await loadFolderContents();
+    }
+
+    // 加载文件夹内容
+    async function loadFolderContents() {
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = '<div class="loading">加载中...</div>';
+
+        try {
+            let folders = [];
+            let documents = [];
+
+            if (currentFolderId) {
+                // 加载子文件夹和子文件
+                const [foldersResponse, documentsResponse] = await Promise.all([
+                    folderAPI.getSubFolders(currentFolderId),
+                    folderAPI.getSubDocuments(currentFolderId)
+                ]);
+
+                if (foldersResponse.success) {
+                    folders = foldersResponse.data.subFolders || [];
+                }
+                if (documentsResponse.success) {
+                    documents = documentsResponse.data.subDocuments || [];
+                }
+
+                // 加载当前文件夹详情
+                const folderDetailResponse = await folderAPI.getFolderDetail(currentFolderId);
+                if (folderDetailResponse.success) {
+                    currentFolder = folderDetailResponse.data;
+                    showFolderInfo(currentFolder);
+                }
+            } else {
+                // 加载根目录的文件夹和文件
+                const [foldersResponse, documentsResponse] = await Promise.all([
+                    folderAPI.getRootFolders(),
+                    documentAPI.getRootDocuments()
+                ]);
+
+                if (foldersResponse.success) {
+                    folders = foldersResponse.data.folders || [];
+                }
+                if (documentsResponse.success) {
+                    documents = documentsResponse.data.documents || [];
+                }
+            }
+
+            displayFileList(folders, documents);
+        } catch (error) {
+            console.error('加载文件夹内容错误:', error);
+            fileList.innerHTML = '<div class="empty-state">加载失败: ' + error.message + '</div>';
+        }
+    }
+
+    // 显示文件夹信息
+    function showFolderInfo(folder) {
+        const folderInfo = document.getElementById('currentFolderInfo');
+        const folderName = document.getElementById('currentFolderName');
+        const folderDescription = document.getElementById('currentFolderDescription');
+
+        folderName.textContent = folder.name;
+        folderDescription.textContent = folder.description || '暂无描述';
+        folderInfo.style.display = 'block';
+    }
+
+    // 隐藏文件夹信息
+    function hideFolderInfo() {
+        document.getElementById('currentFolderInfo').style.display = 'none';
+    }
+
+    // 显示文件列表
+    function displayFileList(folders, documents) {
+        const fileList = document.getElementById('fileList');
+
+        if (folders.length === 0 && documents.length === 0) {
+            fileList.innerHTML = '<div class="empty-state">此文件夹为空</div>';
+            return;
+        }
+
+        let html = '<div class="file-list">';
+
+        // 显示文件夹
+        folders.forEach(folder => {
+            html += `
+                <div class="file-item">
+                    <div class="file-icon folder-icon">📁</div>
+                    <div class="file-name">${escapeHtml(folder.name)}</div>
+                    <div class="file-info">文件夹</div>
+                    <div class="file-info">${new Date(folder.updated_at).toLocaleDateString()}</div>
+                    <div class="folder-actions">
+                        <button class="btn-edit" onclick="enterFolder(${folder.id}, '${folder.name}')">进入</button>
+                        <button class="btn-edit" onclick="editFolder(${folder.id})">编辑</button>
+                        <button class="btn-delete" onclick="deleteFolder(${folder.id}, '${folder.name}')">删除</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        // 显示文档
+        documents.forEach(document => {
+            const docTypeIcon = document.type === 'MARKDOWN' ? '📝' : '📄';
+            html += `
+                <div class="file-item" onclick="openDocument(${document.id})">
+                    <div class="file-icon document-icon">${docTypeIcon}</div>
+                    <div class="file-name">${escapeHtml(document.title)}</div>
+                    <div class="file-info">${document.type === 'MARKDOWN' ? 'Markdown' : '富文本'}</div>
+                    <div class="file-info">${new Date(document.updatedAt).toLocaleDateString()}</div>
+                    <div class="file-info">版本: ${document.version}</div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        fileList.innerHTML = html;
+    }
+
+    // 进入文件夹
+    function enterFolder(folderId, folderName) {
+		if (currentFolderId !== null) {
+			breadcrumbStack.push({
+				id: currentFolderId,
+				name: currentFolder.name
+			});
+		}
+        currentFolderId = folderId;
+        updateBreadcrumb();
+        loadFolderContents();
+    }
+
+    // 编辑文件夹
+    function editFolder(folderId) {
+        window.location.href = `edit-folder.html?id=${folderId}`;
+    }
+
+    // 删除文件夹
+    async function deleteFolder(folderId, folderName) {
+        if (!confirm(`确定要删除文件夹 "${folderName}" 吗？此操作不可撤销。`)) {
+            return;
+        }
+
+        try {
+            const response = await folderAPI.deleteFolder(folderId);
+            if (response.success) {
+                alert('文件夹删除成功');
+                loadFolderContents(); // 重新加载当前文件夹内容
+            } else {
+                alert('删除失败: ' + response.message);
+            }
+        } catch (error) {
+            console.error('删除文件夹错误:', error);
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    // 创建文档
+    function createDocument() {
+        let url = 'create-document.html';
+        if (currentFolderId) {
+            url += `?folderId=${currentFolderId}`;
+        }
+        window.location.href = url;
+    }
+
+    // 创建文件夹
+    function createFolder() {
+        let url = 'create-folder.html';
+        if (currentFolderId) {
+            url += `?parentId=${currentFolderId}`;
+        }
+        window.location.href = url;
+    }
+
+    // 更新面包屑导航
+    function updateBreadcrumb() {
+        const breadcrumb = document.getElementById('breadcrumb');
+        let html = '<a href="#" onclick="loadRoot()">根目录</a>';
+		
+        breadcrumbStack.forEach(item => {
+			console.log(item.name);
+            html += ` / <a href="#" onclick="goToFolder(${item.id})">${escapeHtml(item.name)}</a>`;
+        });
+
+        breadcrumb.innerHTML = html;
+    }
+
+    // 跳转到指定文件夹
+    function goToFolder(folderId) {
+        // 找到要跳转的位置
+        const index = breadcrumbStack.findIndex(item => item.id === folderId);
+        if (index !== -1) {
+            // 截断堆栈
+            breadcrumbStack = breadcrumbStack.slice(0, index);
+            currentFolderId = folderId;
+            updateBreadcrumb();
+            loadFolderContents();
+        }
+    }
+
+    // 打开文档
+    function openDocument(documentId) {
+        window.location.href = `edit-document.html?id=${documentId}`;
+    }
+
+    // HTML转义函数
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+</body>
+</html>
