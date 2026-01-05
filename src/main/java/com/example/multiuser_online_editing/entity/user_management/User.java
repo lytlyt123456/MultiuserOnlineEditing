@@ -62,37 +62,6 @@ public class User {
     // 通过OperationLog中的user字段来关联
     // 级联操作
 
-//    @OneToMany(mappedBy = "owner", fetch = FetchType.LAZY)
-//    private List<Document> ownDocuments = new ArrayList<>();
-//
-//    @ManyToMany(mappedBy = "collaborators")
-//    private List<Document> collaborateDocuments = new ArrayList<>();
-//
-//    @OneToMany(mappedBy = "owner", fetch = FetchType.LAZY)
-//    private List<Folder> ownFolders = new ArrayList<>();
-//
-//    @OneToMany(mappedBy = "owner", fetch = FetchType.LAZY)
-//    private List<Tag> ownTags = new ArrayList<>();
-//
-//    @OneToMany(mappedBy = "owner", fetch = FetchType.LAZY)
-//    private List<Template> ownTemplates = new ArrayList<>();
-//
-//    // 新增：用户创建的评论
-//    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-//    private List<Comment> comments = new ArrayList<>();
-//
-//    // 新增：用户被提及的评论
-//    @ManyToMany(mappedBy = "mentionedUsers")
-//    private List<Comment> mentionedInComments = new ArrayList<>();
-//
-//    // 新增：用户的通知
-//    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-//    private List<Notification> notifications = new ArrayList<>();
-//
-//    // 新增：用户的协作会话
-//    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-//    private List<CollaborationSession> collaborationSessions = new ArrayList<>();
-
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
