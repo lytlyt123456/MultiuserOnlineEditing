@@ -96,7 +96,6 @@
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
 
-		<!-- Jieba Analysis 中文分词 -->
 		<dependency>
 			<groupId>com.huaban</groupId>
 			<artifactId>jieba-analysis</artifactId>
