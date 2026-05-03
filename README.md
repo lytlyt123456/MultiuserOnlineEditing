@@ -96,7 +96,7 @@ src/main/java/com/multiuser_online_editing/
 
 1. **克隆项目**
 ```bash
-git clone 、https://github.com/lytlyt123456/MultiuserOnlineEditing.git
+git clone https://github.com/lytlyt123456/MultiuserOnlineEditing.git
 cd MultiuserOnlineEditing
 ```
 
