@@ -83,20 +83,7 @@ src/main/java/com/multiuser_online_editing/
 
 核心数据表：
 
-| 表名 | 描述 |
-|------|------|
-| `users` | 用户信息、角色、头像 |
-| `documents` | 文档内容、类型、版本、自动保存 |
-| `folders` | 文件夹结构、层级管理 |
-| `tags` | 文档标签 |
-| `templates` | 文档模板（公开/私有） |
-| `comments` | 评论及回复、@提及 |
-| `tasks` | 任务管理、状态、优先级 |
-| `collaboration_sessions` | 协作会话管理 |
-| `notifications` | 通知消息 |
-| `video_conferences` | 视频会议信息 |
-| `operation_logs` | 用户操作日志 |
-| `surveys` | 满意度调查问卷 |
+- [E-R Diagram](docs/db_design.pdf)
 
 ## 🚀 快速开始
 
